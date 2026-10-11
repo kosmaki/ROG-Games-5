@@ -1,0 +1,2882 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Geometry Dash WASM</title>
+  <meta name="description" content="Play Geometry Dash in your browser using WebAssembly!">
+  <style>
+    * { box-sizing: border-box; }
+
+    @font-face {
+      font-family: 'PUSAB';
+      src: url('pusab.otf') format('opentype');
+      font-weight: normal;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background: #000;
+      color: #ddd;
+      font-family: system-ui, -apple-system, monospace;
+      touch-action: none;
+    }
+
+    #app {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: #000;
+    }
+
+    canvas {
+      max-width: 100%;
+      max-height: 100%;
+      aspect-ratio: 16 / 9;
+      background: #000;
+      image-rendering: pixelated;
+      display: block;
+      outline: none;
+      user-select: none;
+    }
+
+    /* Floating Buttons */
+    #floatFsBtn, #mobileKbBtn, #mobileBackBtn, #mobileLogsBtn {
+      position: fixed;
+      z-index: 1000;
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
+      background: rgba(20, 20, 20, 0.65);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      backdrop-filter: blur(2px);
+    }
+    
+    #floatFsBtn.visible, #mobileKbBtn.visible, 
+    #mobileBackBtn.visible, #mobileLogsBtn.visible { 
+      display: flex; 
+    }
+
+    #mobileBackBtn { top: 12px; left: 12px; }
+    #floatFsBtn { top: 12px; right: 12px; }
+    #mobileKbBtn { top: 70px; right: 12px; }
+    #mobileLogsBtn { top: 128px; right: 12px; }
+
+    #mobileKbBtn.active {
+      background: rgba(37, 99, 235, 0.75);
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+
+    #floatFsBtn svg, #mobileKbBtn svg, #mobileBackBtn svg, #mobileLogsBtn svg {
+      width: 22px;
+      height: 22px;
+      fill: none;
+      stroke: #e0e0e0;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    #mobileKbInput {
+      position: absolute;
+      top: -9999px;
+      left: -9999px;
+      opacity: 0;
+    }
+
+    .overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 2000;
+      transition: opacity 0.4s ease, visibility 0.4s ease;
+    }
+    .overlay.hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    #startScreen {
+      background: #090a0f;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      display: block;
+      padding: 40px 16px;
+    }
+
+    .options-panel {
+      background: #14161f;
+      border: 2px solid #0078ff;
+      border-radius: 12px;
+      padding: 24px;
+      max-width: 520px;
+      width: 100%;
+      margin: 0 auto;
+      box-shadow: 0 8px 32px rgba(0, 120, 255, 0.2);
+    }
+
+    .options-panel h1 {
+      margin-top: 0;
+      text-align: center;
+      color: #fff;
+      font-size: 22px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      text-shadow: 0 0 10px #0078ff;
+      margin-bottom: 24px;
+    }
+
+    .opt-group {
+      margin-bottom: 16px;
+    }
+
+    .opt-group label {
+      display: block;
+      font-size: 13px;
+      color: #cbd5e1;
+      margin-bottom: 6px;
+      font-weight: bold;
+    }
+
+    .opt-group input[type="text"],
+    .opt-group input[type="file"] {
+      width: 100%;
+      padding: 10px 12px;
+      background: #090a0f;
+      border: 1px solid #282c3d;
+      color: #fff;
+      border-radius: 6px;
+      font-size: 16px; 
+    }
+
+    .btn-secondary {
+      background: #1e293b;
+      color: #38bdf8;
+      border: 1px solid #334155;
+      padding: 10px 14px;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: background 0.2s;
+      width: 100%;
+    }
+
+    .btn-secondary:hover {
+      background: #334155;
+    }
+
+    .cache-status-box {
+      background: #090a0f;
+      border: 1px solid #1e293b;
+      border-radius: 6px;
+      padding: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      color: #94a3b8;
+      gap: 12px;
+    }
+
+    #playBtn {
+      width: 100%;
+      padding: 14px;
+      margin-top: 20px;
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 18px;
+      font-weight: bold;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      transition: background 0.2s;
+    }
+
+    #playBtn:hover {
+      background: #3b82f6;
+    }
+
+    /* Checkbox Group Alignments */
+    .checkbox-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 4px 0;
+    }
+    
+    .checkbox-group input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
+    }
+    
+    .checkbox-group label {
+      margin: 0;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    .divider-text {
+      text-align: center;
+      color: #64748b;
+      font-size: 12px;
+      margin: 20px 0;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    a {
+      color: #94a4cb;
+      font-size: 15px;
+      text-align: center;
+    }
+
+    summary {
+        cursor: pointer;
+    }
+
+    /* Loading Overlay */
+    #loadingOverlay {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      max-width: 100%;
+      max-height: 100%;
+      aspect-ratio: 16 / 9;
+      background: #000 url('images/bg.webp') center/cover no-repeat;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      transition: opacity 0.4s ease, visibility 0.4s ease;
+      container-type: size;
+    }
+
+    #loadingOverlay.hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .robtop-logo {
+      height: 13.1cqh;
+      object-fit: contain;
+      margin-bottom: 2.8cqh;
+      filter: drop-shadow(0px 0.4cqh 0.6cqh rgba(0,0,0,0.5));
+    }
+
+    .gd-logo {
+      width: 63cqw;
+      object-fit: contain;
+      margin-bottom: 3.7cqh;
+      filter: drop-shadow(0px 0.7cqh 1.1cqh rgba(0,0,0,0.8));
+    }
+
+    .bar-container {
+      width: 39cqw;
+      height: 3.3cqh;
+      background: transparent;
+      border: 0.42cqh solid #ffcc00;
+      border-radius: 9cqh;
+      padding: 0.27cqh;
+      overflow: hidden;
+      box-shadow: 0 0.4cqh 0.9cqh rgba(0,0,0,0.5);
+    }
+
+    #fillBar {
+      width: 0%;
+      height: 100%;
+      background: repeating-linear-gradient(
+        -45deg,
+        #4dc3ff,
+        #4dc3ff 0.78cqw,
+        #0052cc 0.78cqw,
+        #0052cc 1.56cqw
+      );
+      border-radius: 9cqh;
+      transition: width 0.15s linear;
+    }
+
+    #statusText {
+      display: inline-block;
+      width: 100%;
+      margin-top: 4cqh;
+      font-family: 'PUSAB', system-ui, sans-serif;
+      font-size: 2.475cqw;
+      font-weight: normal;
+      text-transform: uppercase;
+      text-align: center;
+
+      padding-top: 0.5em;
+      margin-top: calc(4cqh - 0.5em);
+      background-origin: border-box;
+
+      background-image: linear-gradient(
+        to bottom, 
+        #f89e0b 0%,
+        #ffe748 100%
+      );
+      background-size: 100% 100%;
+    
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      color: transparent;
+      -webkit-text-stroke: 0.1cqw #000000;
+    }
+
+    #abortScreen {
+      background: rgba(15, 5, 5, 0.95);
+      z-index: 4000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .abort-box {
+      background: #2a0808;
+      border: 2px solid #ef4444;
+      padding: 24px;
+      border-radius: 8px;
+      text-align: center;
+      max-width: 700px;
+      width: 90vw;
+    }
+
+    .abort-box h2 {
+      color: #f87171;
+      margin-top: 0;
+      margin-bottom: 12px;
+      font-size: 24px;
+      text-transform: uppercase;
+    }
+
+    .abort-logs {
+      max-height: 220px;
+      overflow-y: auto;
+      background: #110303;
+      border: 1px solid #7f1d1d;
+      color: #38bdf8;
+      font-family: monospace;
+      font-size: 12px;
+      text-align: left;
+      padding: 10px;
+      margin-bottom: 14px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      border-radius: 4px;
+    }
+
+    #abortMessage {
+      color: #fca5a5;
+      font-size: 15px;
+      word-wrap: break-word;
+      font-family: monospace;
+    }
+
+    #console {
+      display: none;
+      position: fixed;
+      bottom: 12px;
+      left: 12px;
+      right: 12px;
+      height: 220px;
+      z-index: 3000;
+      background: rgba(10, 11, 16, 0.96);
+      border: 1px solid #0078ff;
+      border-radius: 6px;
+      font-size: 12px;
+      line-height: 1.45;
+      color: #38bdf8;
+      backdrop-filter: blur(4px);
+      overflow: hidden;
+    }
+
+    #console.visible {
+      display: flex;
+      flex-direction: column;
+    }
+
+    #consoleToolbar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex: 0 0 auto;
+      padding: 8px 10px;
+      background: rgba(20, 24, 34, 0.98);
+      border-bottom: 1px solid #28344a;
+      color: #cbd5e1;
+      font-weight: bold;
+    }
+
+    #consoleToolbar select,
+    #consoleToolbar button {
+      background: #090a0f;
+      color: #ddd;
+      border: 1px solid #334155;
+      border-radius: 4px;
+      padding: 6px 10px;
+      font: inherit;
+    }
+
+    #consoleToolbar select {
+      min-width: 150px;
+      flex: 1;
+    }
+
+    #consoleToolbar button {
+      cursor: pointer;
+    }
+
+    #consoleLogOutput {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 12px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .storage-warning {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 12px;
+      margin-bottom: 14px;
+      background: #3a2608;
+      border: 1px solid #d97706;
+      border-radius: 7px;
+      color: #fde68a;
+      font-size: 12px;
+    }
+    .storage-warning strong { color: #fbbf24; font-size: 13px; }
+    .storage-warning.hidden, #opfsControls.hidden, #nfsControls.hidden { display: none; }
+
+    .storage-mode-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 7px;
+      margin-bottom: 10px;
+    }
+    .storage-mode-btn {
+      background: #090a0f;
+      color: #94a3b8;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      padding: 10px 8px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    .storage-mode-btn.active {
+      color: #fff;
+      background: #2563eb;
+      border-color: #60a5fa;
+    }
+    .storage-mode-btn:disabled { opacity: .45; cursor: not-allowed; }
+
+    .storage-status, .storage-substatus, .explorer-status {
+      color: #94a3b8;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .storage-status {
+      background: #090a0f;
+      border: 1px solid #1e293b;
+      border-radius: 6px;
+      padding: 10px;
+      margin-bottom: 14px;
+    }
+    .profile-row {
+      display: flex;
+      gap: 7px;
+    }
+    .profile-row input {
+      flex: 1;
+      min-width: 0;
+      width: 100%;
+      padding: 10px 12px;
+      background: #090a0f;
+      border: 1px solid #282c3d;
+      color: #fff;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+    .profile-small-btn { width: auto; }
+    .danger-btn { color: #f87171; border-color: #7f1d1d; }
+
+    .opfs-manager-btn {
+      width: 100%;
+      margin-top: 10px;
+    }
+    .opfs-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      background: rgba(0, 0, 0, .78);
+    }
+    .opfs-modal.hidden { display: none; }
+    .opfs-modal-panel {
+      width: min(760px, 100%);
+      max-height: min(760px, 92vh);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: #0b0d13;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      box-shadow: 0 20px 70px rgba(0,0,0,.55);
+    }
+    .opfs-modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 12px 14px;
+      background: #111827;
+      border-bottom: 1px solid #1e293b;
+    }
+    .opfs-modal-header h2 {
+      margin: 0 0 3px;
+      font-size: 15px;
+      color: #fff;
+    }
+    .explorer-close { margin-left: auto; }
+    .explorer-breadcrumbs {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+      padding: 9px;
+      background: #090a0f;
+      border-bottom: 1px solid #1e293b;
+    }
+    .breadcrumb-btn {
+      width: auto;
+      padding: 5px 8px;
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #cbd5e1;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 11px;
+    }
+    .opfs-file-list {
+      min-height: 180px;
+      max-height: 52vh;
+      overflow-y: auto;
+      background: #090a0f;
+    }
+    .opfs-entry {
+      display: grid;
+      grid-template-columns: 34px minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      padding: 9px 10px;
+      border-bottom: 1px solid #172033;
+    }
+    .opfs-entry:last-child { border-bottom: 0; }
+    .opfs-entry-icon {
+      width: 28px;
+      height: 28px;
+      object-fit: contain;
+    }
+    .opfs-entry-name {
+      min-width: 0;
+      color: #e2e8f0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+    .opfs-entry-name.folder { color: #60a5fa; font-weight: bold; }
+
+    .opfs-entry-actions {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .entry-btn {
+      width: auto;
+      padding: 5px 7px;
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #cbd5e1;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 10px;
+    }
+    .entry-btn.danger { color: #f87171; }
+    .entry-btn.profile { color: #86efac; }
+    .opfs-explorer-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 9px;
+      background: #111827;
+      border-top: 1px solid #1e293b;
+    }
+    .explorer-btn {
+      width: auto;
+      padding: 8px 10px;
+      font-size: 12px;
+    }
+    @media (max-width: 520px) {
+      .opfs-entry { grid-template-columns: 30px minmax(0, 1fr); }
+      .opfs-entry-actions { grid-column: 2; justify-content: flex-start; }
+      .opfs-entry-icon { width: 24px; height: 24px; }
+    }
+
+  </style>
+</head>
+
+<body>
+
+  <button id="floatFsBtn" title="Return to fullscreen" type="button" aria-label="Return to fullscreen">
+    <svg viewBox="0 0 24 24">
+      <path d="M8 3H5a2 2 0 0 0-2 2v3"></path>
+      <path d="M16 3h3a2 2 0 0 1 2 2v3"></path>
+      <path d="M8 21H5a2 2 0 0 1-2-2v-3"></path>
+      <path d="M16 21h3a2 2 0 0 0 2-2v-3"></path>
+    </svg>
+  </button>
+
+  <button id="mobileKbBtn" title="Show keyboard" type="button" aria-label="Show keyboard">
+    <svg viewBox="0 0 24 24">
+      <rect x="2" y="5" width="20" height="14" rx="2"></rect>
+      <line x1="6" y1="9" x2="6.01" y2="9"></line>
+      <line x1="10" y1="9" x2="10.01" y2="9"></line>
+      <line x1="14" y1="9" x2="14.01" y2="9"></line>
+      <line x1="18" y1="9" x2="18.01" y2="9"></line>
+      <line x1="6" y1="13" x2="6.01" y2="13"></line>
+      <line x1="10" y1="13" x2="10.01" y2="13"></line>
+      <line x1="14" y1="13" x2="14.01" y2="13"></line>
+      <line x1="18" y1="13" x2="18.01" y2="13"></line>
+      <line x1="8" y1="16.5" x2="16" y2="16.5"></line>
+    </svg>
+  </button>
+  
+  <button id="mobileBackBtn" title="Go Back" type="button" aria-label="Go Back">
+    <svg viewBox="0 0 24 24">
+      <line x1="19" y1="12" x2="5" y2="12"></line>
+      <polyline points="12 19 5 12 12 5"></polyline>
+    </svg>
+  </button>
+  
+  <button id="mobileLogsBtn" title="Show Logs" type="button" aria-label="Show Logs">
+    <svg viewBox="0 0 24 24">
+      <path d="M4 6h16M4 12h16M4 18h16"></path>
+    </svg>
+  </button>
+
+  <input id="mobileKbInput" type="text" autocomplete="off" autocorrect="off" autocapitalize="off"
+    spellcheck="false" tabindex="-1" aria-hidden="true">
+
+
+  <div id="app">
+    <canvas id="canvas" width="1920" height="1080"></canvas>
+
+    <div id="loadingOverlay" class="hidden">
+      <img src="images/rubrub.webp" class="robtop-logo" alt="RobTop" onerror="this.style.display='none'">
+      <img src="images/gd.png" class="gd-logo" alt="Geometry Dash" onerror="this.style.display='none'">
+
+      <div class="bar-container">
+        <div id="fillBar"></div>
+      </div>
+
+      <div id="statusText">Preparing...</div>
+    </div>
+  </div>
+
+  <div id="startScreen" class="overlay">
+    <div class="options-panel">
+      <h1>Geometry Dash Web</h1>
+      <p>Click PLAY to start, or open the dropdowns to customize your experience</p>
+      <p>Credit to MarzRovin for hosting some of the larger files, and the proxy ^w^</p>
+      <div id="storageWarning" class="storage-warning hidden">
+        <strong>OPFS Unavailable</strong>
+        <span>Origin Private File System (OPFS) is not supported in this browser. To save data, you must provide a folder using NFS (If available) Or use RAM only.</span>
+      </div>
+      <details class="moreFilesOptions">
+        <summary class="divider-text">— Storage & Profiles —</summary>
+
+        <div class="storage-mode-row">
+          <button type="button" class="storage-mode-btn" data-storage-mode="ram">RAM</button>
+          <button type="button" class="storage-mode-btn" data-storage-mode="opfs">OPFS</button>
+          <button type="button" class="storage-mode-btn" data-storage-mode="nfs">NFS</button>
+        </div>
+
+        <div id="storageModeStatus" class="storage-status">
+          Storage: loading...
+        </div>
+
+        <div id="opfsControls">
+          <div class="opt-group">
+            <label>Active OPFS Profile</label>
+            <div class="profile-row">
+              <input type="text" id="opfsProfilePath" readonly value="Defualt">
+            </div>
+            <div id="opfsProfileStatus" class="storage-substatus">Profile: Defualt</div>
+          </div>
+
+          <div class="opt-group checkbox-group">
+            <input type="checkbox" id="defaultOpfsProfileCheckbox">
+            <label for="defaultOpfsProfileCheckbox">Use this profile automatically on page load</label>
+          </div>
+
+          <button type="button" id="openOpfsExplorerBtn" class="btn-secondary opfs-manager-btn">Open OPFS File Explorer</button>
+
+          <div id="opfsExplorerModal" class="opfs-modal hidden" role="dialog" aria-modal="true" aria-labelledby="opfsExplorerTitle">
+            <div class="opfs-modal-panel">
+              <div class="opfs-modal-header">
+                <div>
+                  <h2 id="opfsExplorerTitle">OPFS File Explorer</h2>
+                  <div id="opfsExplorerStatus" class="explorer-status">Loading OPFS...</div>
+                </div>
+                <button type="button" id="closeOpfsExplorerBtn" class="entry-btn explorer-close">Close</button>
+              </div>
+
+              <div id="opfsBreadcrumbs" class="explorer-breadcrumbs"></div>
+              <div id="opfsFileList" class="opfs-file-list"></div>
+
+              <div class="opfs-explorer-actions">
+                <button type="button" id="opfsUpBtn" class="btn-secondary explorer-btn">Up</button>
+                <button type="button" id="opfsRefreshBtn" class="btn-secondary explorer-btn">Refresh</button>
+                <button type="button" id="opfsNewFolderBtn" class="btn-secondary explorer-btn">New Folder</button>
+                <button type="button" id="opfsUploadFilesBtn" class="btn-secondary explorer-btn">Upload Files</button>
+                <button type="button" id="opfsUploadFolderBtn" class="btn-secondary explorer-btn">Upload Folder</button>
+              </div>
+            </div>
+          </div>
+
+          <input type="file" id="opfsUploadInput" multiple hidden>
+          <input type="file" id="opfsFolderInput" webkitdirectory directory multiple hidden>
+          <input type="file" id="opfsReplaceInput" hidden>
+        </div>
+
+        <div id="nfsControls" class="hidden">
+          <div class="opt-group">
+            <label>Native File System folder</label>
+            <button type="button" id="selectDirBtn" class="btn-secondary">Select Save Folder</button>
+            <div id="dirStatus" class="storage-substatus">No NFS folder selected.</div>
+          </div>
+        </div>
+
+      </details>
+
+      <details class="moreFilesOptions">
+        <summary class="divider-text">— Proxy —</summary>
+        <div class="opt-group">
+            <label>Network Proxy</label>
+            <p style="font-size: 10px">Main proxy: https://gdwasmproxy.sutinognic.workers.dev/proxy.php?url=</p>
+            <p style="font-size: 10px">Alternative proxy: https://bluetoadmaker.infinityfreeapp.com/GDWASM/proxy.php?url=</p>
+            <input
+            type="text"
+            id="proxyInput"
+            value="https://gdwasmproxy.sutinognic.workers.dev/proxy.php?url="
+            >
+        </div>
+      </details>
+
+      <details class="moreFilesOptions">
+        <summary class="divider-text">— Manually Manage Files —</summary>
+        <div class="opt-group">
+          <div class="cache-status-box">
+            <span id="cacheStatusText">Checking engine cache...</span>
+            <button
+              type="button"
+              class="btn-secondary"
+              id="clearCacheBtn"
+              style="width: auto;"
+            >
+              Clear Cache
+            </button>
+          </div>
+        </div>
+        <div class="divider-text">
+          — Geometry Dash WASM and DATA files —
+        </div>
+        <div class="opt-group">
+            <label>WASM File URL:</label>
+            <input type="text" id="wasmUrlInput" placeholder="https://media.githubusercontent.com/media/MarzRovin/GDWASM/main/gd_web.wasm">
+        </div>
+
+        <div class="opt-group">
+            <label>Data File URL:</label>
+            <input type="text" id="dataUrlInput" placeholder="https://media.githubusercontent.com/media/MarzRovin/GDWASM/main/gd_web.data">
+        </div>
+
+        <div class="divider-text">
+            — OR —
+        </div>
+
+        <div class="opt-group">
+            <label>Select gd_web.wasm:</label>
+            <input type="file" id="manualWasm" accept=".wasm">
+        </div>
+
+        <div class="opt-group">
+            <label>Select gd_web.data:</label>
+            <input type="file" id="manualData" accept=".data">
+        </div>
+      </details>
+        
+      <details class="moreFilesOptions">
+        <summary class="divider-text">— Options —</summary>
+        <div class="opt-group checkbox-group">
+            <input type="checkbox" id="showLogsCheckbox">
+            <label for="showLogsCheckbox">Show Logs Button</label>
+        </div>
+        <div class="opt-group checkbox-group">
+            <input type="checkbox" id="forceKbCheckbox">
+            <label for="forceKbCheckbox">Force Show Keyboard Button</label>
+        </div>
+        <div class="opt-group checkbox-group">
+            <input type="checkbox" id="showBackBtnCheckbox">
+            <label for="showBackBtnCheckbox">Show Back Button</label>
+        </div>
+      </details>
+
+      <details class="moreFilesOptions">
+        <summary class="divider-text">— Download —</summary>
+        <div class="opt-group">
+          <a href="download.zip">Download Source</a><br>
+          <a href="https://drive.google.com/drive/folders/174KLLJQNwnTby4YHDvU7-mDal2Prc3Uw">Download the .wasm and .data files</a>
+        </div>
+      </details>
+
+      <button id="playBtn">PLAY</button>
+    </div>
+  </div>
+
+  <div id="abortScreen" class="overlay hidden">
+    <div class="abort-box">
+      <h2>Engine Aborted/Crashed</h2>
+      <div id="abortLogs" class="abort-logs"></div>
+      <div id="abortMessage">
+        A native crash or abort() was called.
+      </div>
+      <button id="ignoreAbortBtn">Ignore</button>
+      <button onclick="window.location.reload();">Refresh</button>
+
+    </div>
+  </div>
+
+  <div id="console">
+    <div id="consoleToolbar">
+      <label for="logFilter">Log:</label>
+
+      <select id="logFilter">
+        <option value="*">All logs</option>
+      </select>
+
+      <button type="button" id="clearLogBtn">Clear</button>
+    </div>
+
+    <div id="consoleLogOutput"></div>
+  </div>
+
+<script>
+    const CACHE_NAME = 'gd-wasm-cache-v1';
+
+    const consoleEl = document.getElementById('console');
+    const consoleLogOutput = document.getElementById('consoleLogOutput');
+    const logFilter = document.getElementById('logFilter');
+    const clearLogBtn = document.getElementById('clearLogBtn');
+
+    window.gdLogRaw = [];
+
+    let logQueue = [];
+    let logScheduled = false;
+
+    const MAX_LOG_LINES = 1000;
+    const logNames = new Set();
+
+    function getLogName(str) {
+      const match = String(str).match(/^\[([^\]]+)\]/);
+      return match ? match[1] : 'system';
+    }
+
+    function refreshLogFilter() {
+      const selected = logFilter.value;
+      const names = Array.from(logNames)
+        .sort((a, b) => a.localeCompare(b));
+
+      while (logFilter.options.length > 1) {
+        logFilter.remove(1);
+      }
+
+      for (const name of names) {
+        const option = document.createElement('option');
+        option.value = name;
+        option.textContent = `[${name}]`;
+        logFilter.appendChild(option);
+      }
+
+      logFilter.value =
+        (selected === '*' || logNames.has(selected))
+          ? selected
+          : '*';
+    }
+
+    function renderLogs(forceBottom) {
+      const selected = logFilter.value;
+      const frag = document.createDocumentFragment();
+
+      for (const str of window.gdLogRaw) {
+        if (selected !== '*' && getLogName(str) !== selected) {
+          continue;
+        }
+
+        const line = document.createElement('div');
+        line.textContent = str;
+        frag.appendChild(line);
+      }
+
+      consoleLogOutput.textContent = '';
+      consoleLogOutput.appendChild(frag);
+
+      if (forceBottom) {
+        consoleLogOutput.scrollTop =
+          consoleLogOutput.scrollHeight;
+      }
+    }
+
+    function flushLog() {
+      logScheduled = false;
+
+      if (!logQueue.length) {
+        return;
+      }
+
+      logQueue = [];
+
+      refreshLogFilter();
+      renderLogs(true);
+    }
+
+    function say(msg) {
+      const str = String(msg);
+
+      console.log(str);
+
+      window.gdLogRaw.push(str);
+
+      if (window.gdLogRaw.length > MAX_LOG_LINES) {
+        window.gdLogRaw.splice(
+          0,
+          window.gdLogRaw.length - MAX_LOG_LINES
+        );
+      }
+
+      logNames.add(getLogName(str));
+      logQueue.push(str);
+
+      if (!logScheduled) {
+        logScheduled = true;
+        requestAnimationFrame(flushLog);
+      }
+
+      if (str.includes('Aborted(')) {
+        triggerAbort(str);
+      }
+    }
+
+    logFilter.addEventListener('change', () => {
+      renderLogs(true);
+    });
+
+    clearLogBtn.addEventListener('click', () => {
+      window.gdLogRaw.length = 0;
+      logQueue = [];
+      renderLogs(false);
+    });
+    
+    // Push an initial state so the first back press doesn't exit the page
+    window.history.pushState({ noback: true }, '');
+    
+    window.addEventListener('popstate', function(e) {
+      if (window.__gdInputReady && window.Module) {
+        var q = Module.gdInputQueue;
+        var lp = 1 | (0x01 << 16); // Escape scan code
+        
+        // Push Escape Keydown (0x100) and Keyup (0x101) directly to the engine
+        q.push([0x100, 0x1B, lp]);
+        q.push([0x101, 0x1B, lp | -1073741824]);
+      }
+      
+      // Re-push the dummy state to intercept the next back button press
+      window.history.pushState({ noback: true }, '');
+    });
+
+
+    /*
+     * ------------------------------------------------------------------
+     * NETWORK PROXY
+     * ------------------------------------------------------------------
+     */
+
+    let activeProxyPrefix = '';
+
+    function formatProxyUrl(originalUrl, proxyPrefix) {
+      const urlStr =
+        (typeof originalUrl === 'object' && originalUrl.url)
+          ? originalUrl.url
+          : String(originalUrl);
+
+      let actualTarget = urlStr;
+
+      if (urlStr.includes('/__proxy?url=')) {
+        const encodedPart =
+          urlStr.split('/__proxy?url=')[1];
+
+        try {
+          actualTarget = decodeURIComponent(encodedPart);
+        } catch (e) {
+          actualTarget = encodedPart;
+        }
+
+      } else if (urlStr.startsWith('__proxy?url=')) {
+        const encodedPart =
+          urlStr.split('__proxy?url=')[1];
+
+        try {
+          actualTarget = decodeURIComponent(encodedPart);
+        } catch (e) {
+          actualTarget = encodedPart;
+        }
+      }
+
+      actualTarget =
+        actualTarget.replace(/^\/+http/, 'http');
+
+      const isGameDomain =
+        actualTarget.includes('boomlings.com') ||
+        actualTarget.includes('geometrydash.com') ||
+        actualTarget.includes('robtopgames.org') ||
+        actualTarget.includes('audio.ngfiles') ||
+        actualTarget.includes('geometrydashfiles')
+
+      if (isGameDomain) {
+        if (!proxyPrefix) {
+          return actualTarget;
+        }
+
+        let targetUrl;
+
+        const cleanPrefix = proxyPrefix.trim();
+        const cleanTarget =
+          actualTarget.replace(/^\/+/, '');
+
+        if (
+          cleanPrefix.endsWith('?') ||
+          cleanPrefix.endsWith('=')
+        ) {
+          targetUrl =
+            cleanPrefix + cleanTarget;
+
+        } else if (cleanPrefix.endsWith('/')) {
+          targetUrl =
+            cleanPrefix + cleanTarget;
+
+        } else {
+          targetUrl =
+            cleanPrefix + '/' + cleanTarget;
+        }
+
+        say(
+          `[proxy] Intercepted game request: ${cleanTarget} -> ${targetUrl}`
+        );
+
+        return targetUrl;
+      }
+
+      return actualTarget;
+    }
+
+    const nativeFetch = window.fetch;
+
+    window.fetch = function(input, init) {
+      if (typeof input === 'string') {
+        input =
+          formatProxyUrl(
+            input,
+            activeProxyPrefix
+          );
+
+      } else if (input && input.url) {
+        input =
+          new Request(
+            formatProxyUrl(
+              input.url,
+              activeProxyPrefix
+            ),
+            init
+          );
+      }
+
+      return nativeFetch.call(this, input, init);
+    };
+
+    const nativeXhrOpen =
+      XMLHttpRequest.prototype.open;
+
+    XMLHttpRequest.prototype.open =
+      function(method, url, ...args) {
+        if (typeof url === 'string') {
+          url =
+            formatProxyUrl(
+              url,
+              activeProxyPrefix
+            );
+        }
+
+        return nativeXhrOpen.call(
+          this,
+          method,
+          url,
+          ...args
+        );
+      };
+
+    document.addEventListener(
+      'keydown',
+      function(e) {
+        if (
+          e.ctrlKey &&
+          e.altKey &&
+          e.shiftKey
+        ) {
+          e.preventDefault();
+
+          consoleEl.classList.toggle('visible');
+
+          say(
+            '[system] Toggled log console display.'
+          );
+        }
+      }
+    );
+
+    /*
+     * ------------------------------------------------------------------
+     * FULLSCREEN
+     * ------------------------------------------------------------------
+     */
+
+    const fsBtn =
+      document.getElementById('floatFsBtn');
+
+    function isFullscreen() {
+      return !!(
+        document.fullscreenElement ||
+        document.webkitFullscreenElement ||
+        document.mozFullScreenElement
+      );
+    }
+
+    function updateFsBtnVisibility() {
+      fsBtn.classList.toggle('visible', !isFullscreen());
+    }
+    updateFsBtnVisibility();
+
+
+    async function requestFullscreenSafe() {
+      const doc = document.documentElement;
+
+      try {
+        if (doc.requestFullscreen) {
+          await doc.requestFullscreen();
+
+        } else if (doc.webkitRequestFullscreen) {
+          await doc.webkitRequestFullscreen();
+        }
+
+        if (
+          navigator.keyboard &&
+          navigator.keyboard.lock
+        ) {
+          await navigator.keyboard.lock(['Escape']);
+        }
+
+      } catch (e) {
+        console.warn(
+          "Fullscreen or Keyboard Lock failed",
+          e
+        );
+      }
+    }
+
+    fsBtn.addEventListener(
+      'click',
+      requestFullscreenSafe
+    );
+
+    [
+      'fullscreenchange',
+      'webkitfullscreenchange',
+      'mozfullscreenchange'
+    ].forEach(evt => {
+      document.addEventListener(
+        evt,
+        updateFsBtnVisibility
+      );
+    });
+
+    /*
+     * ------------------------------------------------------------------
+     * MOBILE KEYBOARD
+     * ------------------------------------------------------------------
+     */
+     
+    document.getElementById('forceKbCheckbox').addEventListener('change', function(e) {
+      forceShowKb = e.target.checked;
+      updateKbBtnVisibility();
+    });
+
+    const kbBtn = document.getElementById('mobileKbBtn');
+    const kbInput = document.getElementById('mobileKbInput');
+    let kbConfirmedPhysical = false;
+
+    function hasCoarsePointer() {
+      return !!(
+        window.matchMedia &&
+        window.matchMedia('(pointer: coarse)').matches
+      );
+    }
+
+    function hasTouchSupport() {
+      return (
+        'ontouchstart' in window ||
+        navigator.maxTouchPoints > 0
+      );
+    }
+    
+    document.getElementById('mobileBackBtn').addEventListener('click', function() {
+      if (window.__gdInputReady && window.Module) {
+        var q = Module.gdInputQueue;
+        var lp = 1 | (0x01 << 16); 
+        
+        q.push([0x100, 0x1B, lp]);
+        q.push([0x101, 0x1B, lp | -1073741824]);
+      }
+    });
+
+    let forceShowKb = false; 
+    
+    function updateKbBtnVisibility() {
+      const likelyMobile = hasTouchSupport() && hasCoarsePointer();
+    
+      kbBtn.classList.toggle(
+        'visible',
+        forceShowKb || (likelyMobile && !kbConfirmedPhysical) 
+      );
+    }
+
+    let lastBlurTime = 0;
+    
+    kbInput.addEventListener('blur', function() {
+      kbBtn.classList.remove('active');
+      lastBlurTime = Date.now();
+    });
+    
+    kbBtn.addEventListener('click', function() {
+      if (Date.now() - lastBlurTime < 200) {
+        return; 
+      }
+      
+      if (document.activeElement === kbInput) {
+        kbInput.blur();
+      } else {
+        kbInput.focus({ preventScroll: true });
+      }
+    });
+
+    kbInput.addEventListener('focus', function() {
+      kbBtn.classList.add('active');
+    });
+    
+    kbInput.addEventListener('input', function(e) {
+      if (!window.__gdInputReady || !window.Module) return;
+    
+      var q = Module.gdInputQueue;
+    
+      if (e.inputType === 'deleteContentBackward' || e.inputType === 'deleteContentForward') {
+        q.push([0x100, 0x08, 1 | (0x0E << 16)]); 
+        q.push([0x101, 0x08, 1 | (0x0E << 16) | -1073741824]); 
+      } else if (e.inputType === 'insertLineBreak' || (e.data && e.data === '\n')) {
+        q.push([0x100, 0x0D, 1 | (0x1C << 16)]); 
+        q.push([0x101, 0x0D, 1 | (0x1C << 16) | -1073741824]); 
+      } else if (e.data) {
+        for (let i = 0; i < e.data.length; i++) {
+          const charCode = e.data.charCodeAt(i);
+          const vkCode = e.data[i].toUpperCase().charCodeAt(0);
+    
+          q.push([0x100, vkCode, 1]); 
+          q.push([0x0102, charCode, 1]); 
+          q.push([0x101, vkCode, 1 | -1073741824]); 
+        }
+      }
+    
+      kbInput.value = '';
+    });
+
+
+    window.addEventListener(
+      'keydown',
+      function(e) {
+        if (document.activeElement !== kbInput) {
+          kbConfirmedPhysical = true;
+          updateKbBtnVisibility();
+        }
+      },
+      true
+    );
+
+    if (window.matchMedia) {
+      const pointerQuery =
+        window.matchMedia('(pointer: coarse)');
+      const onPointerChange =
+        () => updateKbBtnVisibility();
+
+      if (pointerQuery.addEventListener) {
+        pointerQuery.addEventListener(
+          'change',
+          onPointerChange
+        );
+      } else if (pointerQuery.addListener) {
+        pointerQuery.addListener(onPointerChange);
+      }
+    }
+
+    updateKbBtnVisibility();
+    
+    document.getElementById('mobileLogsBtn').addEventListener('click', function() {
+      const consoleEl = document.getElementById('console');
+      consoleEl.classList.toggle('visible');
+      say('[system] Toggled log console display via mobile button.');
+    });
+
+    /*
+     * ------------------------------------------------------------------
+     * UI / LOADING
+     * ------------------------------------------------------------------
+     */
+
+    const fillBar = document.getElementById('fillBar');
+    const statusText = document.getElementById('statusText');
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    const startScreen = document.getElementById('startScreen');
+    const abortScreen = document.getElementById('abortScreen');
+    const abortMessage = document.getElementById('abortMessage');
+    const abortLogs = document.getElementById('abortLogs');
+    const cacheStatusText = document.getElementById('cacheStatusText');
+
+    function updateProgress(pct, status) {
+      fillBar.style.width = Math.min(100, Math.max(0, pct)) + '%';
+      if (status) {
+        statusText.textContent = status;
+      }
+    }
+
+    let isEngineAborted = false;
+    let lastAbortReason = null;
+    let abortIgnored = false;
+
+    function triggerAbort(reason) {
+      reason = reason || "Unknown native crash.";
+
+      if (isEngineAborted || (abortIgnored && reason === lastAbortReason)) {
+          return;
+      }
+
+      isEngineAborted = true;
+      abortIgnored = false;
+      lastAbortReason = reason;
+
+      loadingOverlay.classList.add('hidden');
+      abortScreen.classList.remove('hidden');
+      abortMessage.textContent = reason;
+
+      if (abortLogs) {
+          abortLogs.textContent = window.gdLogRaw.join('\n');
+          abortLogs.scrollTop = abortLogs.scrollHeight;
+      }
+
+      say('[fatal] Engine halted due to a crash.');
+    }
+
+    const ignoreAbortBtn = document.getElementById('ignoreAbortBtn');
+    if (ignoreAbortBtn) {
+      ignoreAbortBtn.addEventListener('click', () => {
+          abortIgnored = true;
+          isEngineAborted = false;
+          abortScreen.classList.add('hidden');
+      });
+    }
+
+    /*
+     * ------------------------------------------------------------------
+     * CACHE
+     * ------------------------------------------------------------------
+     */
+
+    async function checkCacheState() {
+      if (!('caches' in window)) {
+        cacheStatusText.textContent = "Cache: API unsupported";
+        return;
+      }
+
+      try {
+        const cache = await caches.open(CACHE_NAME);
+        const keys = await cache.keys();
+
+        if (keys.length > 0) {
+          cacheStatusText.textContent = `Cache: Ready! (${keys.length} files cached!)`;
+        } else {
+          cacheStatusText.textContent = "Cache: Empty";
+        }
+      } catch (e) {
+        cacheStatusText.textContent = "Cache: Ready";
+      }
+    }
+
+    checkCacheState();
+
+    document.getElementById('clearCacheBtn').addEventListener(
+      'click', async () => {
+        if (window.confirm("Are you sure you want to clear the cache?")) {
+          if ('caches' in window) {
+            await caches.delete(CACHE_NAME);
+            say('[cache] Cache storage cleared.');
+            cacheStatusText.textContent = "Cache: Cleared";
+          }
+        }
+      }
+    );
+
+    /*
+     * ------------------------------------------------------------------
+     * ENGINE ASSET LOADING
+     * ------------------------------------------------------------------
+     */
+
+    async function fetchAsset(fileName, targetUrl, label, basePct, weightPct) {
+      if ('caches' in window) {
+        try {
+          const cache = await caches.open(CACHE_NAME);
+          // Match by the specific URL instead of the generic fileName
+          const cachedResponse = await cache.match(targetUrl);
+
+          if (cachedResponse) {
+            updateProgress(basePct + weightPct, `Loaded ${label} (Cached)`);
+            say(`[cache] Using cached version of ${fileName} from ${targetUrl}.`);
+            return await cachedResponse.arrayBuffer();
+          }
+        } catch (err) {
+          say(`[cache] Warning reading cache: ${err.message}`);
+        }
+      }
+
+      if (!targetUrl) {
+        throw new Error(`No URL provided for ${fileName} and it is not cached.`);
+      }
+
+      say(`Fetching ${fileName} from ${targetUrl}...`);
+      const response = await nativeFetch(targetUrl);
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status} when downloading ${fileName}`);
+      }
+
+      const contentLength = response.headers.get('content-length');
+      let buffer;
+
+      if (!contentLength) {
+        buffer = await response.arrayBuffer();
+      } else {
+        const total = parseInt(contentLength, 10);
+        let loaded = 0;
+        const reader = response.body.getReader();
+        const chunks = [];
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          chunks.push(value);
+          loaded += value.length;
+
+          const chunkPct = Math.round((loaded / total) * weightPct);
+          const mbLoaded = (loaded / (1024 * 1024)).toFixed(1);
+          const mbTotal = (total / (1024 * 1024)).toFixed(1);
+
+          updateProgress(basePct + chunkPct, `Fetching ${label} (${mbLoaded} MB / ${mbTotal} MB)`);
+        }
+
+        const combined = new Uint8Array(loaded);
+        let offset = 0;
+
+        for (const chunk of chunks) {
+          combined.set(chunk, offset);
+          offset += chunk.length;
+        }
+
+        buffer = combined.buffer;
+      }
+
+      if ('caches' in window) {
+        try {
+          const cache = await caches.open(CACHE_NAME);
+          // Store the file using the specific URL as the key
+          await cache.put(targetUrl, new Response(buffer.slice(0)));
+          say(`[cache] Saved ${fileName} to cache.`);
+        } catch (err) {
+          say(`[cache] Failed saving ${fileName} to cache. ${err}`);
+        }
+      }
+
+      updateProgress(basePct + weightPct, `Loaded ${label}`);
+      return buffer;
+    }
+
+    /*
+     * ------------------------------------------------------------------
+     * STORAGE / OPFS PROFILES / NFS / RAM
+     * ------------------------------------------------------------------
+     */
+    let saveDirHandle = null;
+    let opfsDirHandle = null;
+    let opfsProfileHandle = null;
+    let opfsProfilePath = '/';
+    let opfsExplorerPath = [];
+    let initialFilesData = [];
+    const lastSyncedMeta = new Map();
+    const knownEngineFiles = new Set();
+    const coreEngineFiles = new Set();
+
+    let storageMode = 'opfs';
+    let coreFilesystemInitialized = false;
+    let userFolderRestored = false;
+    let engineFullyInitialized = false;
+    let syncInProgress = false;
+    let saveSyncTimer = null;
+    let forceFullSync = false;
+
+    const storageWarning = document.getElementById('storageWarning');
+    const storageModeStatus = document.getElementById('storageModeStatus');
+    const opfsControls = document.getElementById('opfsControls');
+    const nfsControls = document.getElementById('nfsControls');
+    const opfsProfilePathEl = document.getElementById('opfsProfilePath');
+    const opfsProfileStatus = document.getElementById('opfsProfileStatus');
+    const opfsBreadcrumbs = document.getElementById('opfsBreadcrumbs');
+    const opfsFileList = document.getElementById('opfsFileList');
+    const opfsExplorerStatus = document.getElementById('opfsExplorerStatus');
+    const defaultOpfsProfileCheckbox = document.getElementById('defaultOpfsProfileCheckbox');
+
+    const OPFS_DEFAULT_PROFILE_KEY = 'gd-wasm-default-opfs-profile';
+    const STORAGE_MODE_KEY = 'gd-wasm-storage-mode';
+    const playBtn = document.getElementById('playBtn');
+
+    const hasOPFS = !!(navigator.storage && navigator.storage.getDirectory);
+    const hasNFS = typeof window.showDirectoryPicker === 'function';
+
+    function updatePlayButtonState() {
+      const blocked = storageMode === 'nfs' && !saveDirHandle;
+      playBtn.disabled = blocked;
+      playBtn.title = blocked ? 'Select an NFS save folder before playing.' : '';
+    }
+
+    function normalizeProfilePath(path) {
+      const parts = String(path || '/').split('/').filter(Boolean);
+      return parts.length ? '/' + parts.join('/') : '/';
+    }
+
+    async function getOpfsHandle() {
+      if (!opfsDirHandle && hasOPFS) {
+        try {
+          opfsDirHandle = await navigator.storage.getDirectory();
+          storageWarning.classList.add('hidden');
+        } catch (e) {
+          storageWarning.classList.remove('hidden');
+          storageWarning.querySelector('span').textContent =
+            `Origin Private File System (OPFS) could not be accessed.\n${e.message || e}\nTo save data, you must provide a folder using NFS (If available) Or use RAM only.`;
+          say(`[storage] Failed to access OPFS: ${e.message || e}`);
+          opfsDirHandle = null;
+        }
+      }
+      return opfsDirHandle;
+    }
+
+    async function getOpfsPathHandle(path, create = false) {
+      const root = await getOpfsHandle();
+      if (!root) return null;
+      let handle = root;
+      for (const part of normalizeProfilePath(path).split('/').filter(Boolean)) {
+        handle = await handle.getDirectoryHandle(part, { create });
+      }
+      return handle;
+    }
+
+    async function getActiveStorageHandle() {
+      if (storageMode === 'ram') return null;
+      if (storageMode === 'nfs') return saveDirHandle;
+      if (!hasOPFS) return null;
+      if (!opfsProfileHandle) {
+        opfsProfileHandle = await getOpfsPathHandle(opfsProfilePath, false);
+      }
+      return opfsProfileHandle;
+    }
+
+    async function initStorageSystem() {
+      const mode = storageMode;
+      opfsControls.classList.toggle('hidden', mode !== 'opfs');
+      nfsControls.classList.toggle('hidden', mode !== 'nfs');
+
+      document.querySelectorAll('.storage-mode-btn').forEach(btn => {
+        const m = btn.dataset.storageMode;
+        btn.classList.toggle('active', m === mode);
+        btn.disabled = (m === 'opfs' && !hasOPFS) || (m === 'nfs' && !hasNFS);
+      });
+
+      if (!hasOPFS) {
+        storageWarning.classList.remove('hidden');
+      } else {
+        storageWarning.classList.add('hidden');
+      }
+
+      let detail = 'RAM only — nothing is written to persistent storage.';
+      if (mode === 'opfs') {
+        detail = hasOPFS
+          ? `OPFS profile: ${opfsProfilePath}`
+          : 'OPFS is unavailable in this browser.';
+      } else if (mode === 'nfs') {
+        detail = saveDirHandle
+          ? `NFS folder: ${saveDirHandle.name}`
+          : (hasNFS ? 'No NFS folder selected.' : 'NFS is unavailable in this browser.');
+        document.getElementById('dirStatus').textContent = saveDirHandle
+          ? `NFS folder: ${saveDirHandle.name} — Read/Write OK.`
+          : (hasNFS ? 'No NFS folder selected.' : 'NFS is unavailable in this browser.');
+      }
+      storageModeStatus.textContent = `Storage: ${mode.toUpperCase()} — ${detail}`;
+      const displayProfilePath = normalizeProfilePath(opfsProfilePath).replace(/^\//, '') || 'Defualt';
+      const isDefaultProfile = localStorage.getItem(OPFS_DEFAULT_PROFILE_KEY) === normalizeProfilePath(opfsProfilePath);
+      const isActiveProfile = mode === 'opfs' && !!opfsProfileHandle;
+      opfsProfilePathEl.value = displayProfilePath;
+      opfsProfileStatus.textContent = `Profile: ${displayProfilePath}${isDefaultProfile ? ' (default)' : ''}${isActiveProfile ? ' — In Use' : ''}`;
+      updatePlayButtonState();
+    }
+
+    function setStorageMode(mode) {
+      if (mode === 'opfs' && !hasOPFS) {
+        alert('OPFS is not supported in this browser.');
+        return;
+      }
+      if (mode === 'nfs' && !hasNFS) {
+        alert('NFS is not supported in this browser.');
+        return;
+      }
+      storageMode = mode;
+      localStorage.setItem(STORAGE_MODE_KEY, mode);
+      lastSyncedMeta.clear();
+      knownEngineFiles.clear();
+      forceFullSync = true;
+      initStorageSystem();
+      say(`[storage] Switched storage mode to ${mode.toUpperCase()}.`);
+
+      if (window.Module && window.Module.FS) {
+        userFolderRestored = false;
+        clearEngineUserFiles().then(() => applyInitialSaves()).then(() => {
+          if (engineFullyInitialized) syncEngineSavesToDisk();
+        });
+      }
+      if (mode === 'opfs') refreshOpfsExplorer();
+    }
+
+    document.querySelectorAll('.storage-mode-btn').forEach(btn => {
+      btn.addEventListener('click', () => setStorageMode(btn.dataset.storageMode));
+    });
+
+    function getRelativePathFromExplorer() {
+      return opfsExplorerPath.join('/');
+    }
+
+    async function getExplorerDirectory() {
+      return getOpfsPathHandle('/' + getRelativePathFromExplorer(), false);
+    }
+
+    async function getFolderAccessStatus(handle) {
+      try {
+        if (typeof handle.queryPermission !== 'function') {
+          return { text: 'Read/Write: available', cls: 'rw' };
+        }
+        const permission = await handle.queryPermission({ mode: 'readwrite' });
+        if (permission === 'granted') return { text: 'Read/Write: granted', cls: 'rw' };
+        if (permission === 'prompt') return { text: 'Read/Write: permission needed', cls: 'prompt' };
+        return { text: 'Read/Write: denied', cls: 'error' };
+      } catch (e) {
+        return { text: `Folder access error: ${e.message || e}`, cls: 'error' };
+      }
+    }
+
+    async function refreshOpfsExplorer() {
+      if (!hasOPFS) {
+        opfsExplorerStatus.textContent = 'OPFS is not supported.';
+        return;
+      }
+      try {
+        const dir = await getExplorerDirectory();
+        if (!dir) throw new Error('Directory not found');
+        const entries = [];
+        for await (const entry of dir.values()) {
+          entries.push(entry);
+        }
+        entries.sort((a, b) => {
+          if (a.kind !== b.kind) return a.kind === 'directory' ? -1 : 1;
+          return a.name.localeCompare(b.name);
+        });
+
+        opfsFileList.textContent = '';
+        const atRoot = opfsExplorerPath.length === 0;
+
+        for (const entry of entries) {
+          const row = document.createElement('div');
+          row.className = 'opfs-entry';
+
+          const icon = document.createElement('img');
+          icon.className = 'opfs-entry-icon';
+          icon.src = entry.kind === 'directory' ? 'images/folder.png' : 'images/file.png';
+          icon.alt = entry.kind === 'directory' ? 'Folder' : 'File';
+          row.appendChild(icon);
+
+          const name = document.createElement('div');
+          name.className = `opfs-entry-name ${entry.kind === 'directory' ? 'folder' : ''}`;
+          name.textContent = entry.name;
+          name.title = entry.name;
+          name.onclick = () => entry.kind === 'directory'
+            ? openOpfsExplorerFolder(entry.name)
+            : openOpfsFile(entry);
+          row.appendChild(name);
+
+          const actions = document.createElement('div');
+          actions.className = 'opfs-entry-actions';
+
+          if (entry.kind === 'directory') {
+            addEntryButton(actions, 'Open', () => openOpfsExplorerFolder(entry.name));
+            if (atRoot) {
+              const entryPath = currentExplorerPathWith(entry.name);
+              const isActive = normalizeProfilePath(opfsProfilePath) === entryPath;
+              addEntryButton(actions, isActive ? 'In Use' : 'Use', () => useOpfsProfile(entryPath), isActive ? 'profile active' : 'profile');
+            }
+            addEntryButton(actions, 'ZIP', () => downloadOpfsFolder(entry));
+            addEntryButton(actions, 'Delete', () => deleteOpfsEntry(entry), 'danger');
+          } else {
+            addEntryButton(actions, 'Open', () => openOpfsFile(entry));
+            addEntryButton(actions, 'Download', () => downloadOpfsFile(entry));
+            addEntryButton(actions, 'Replace', () => replaceOpfsFile(entry));
+            addEntryButton(actions, 'Delete', () => deleteOpfsEntry(entry), 'danger');
+          }
+          row.appendChild(actions);
+          opfsFileList.appendChild(row);
+        }
+
+        const explorerDisplayPath = getRelativePathFromExplorer() || 'OPFS';
+        opfsExplorerStatus.textContent =
+          `${entries.length} item${entries.length === 1 ? '' : 's'} in ${explorerDisplayPath}`;
+        document.getElementById('opfsNewFolderBtn').textContent =
+          atRoot ? 'New Profile' : 'New Folder';
+        document.getElementById('opfsUploadFilesBtn').style.display = atRoot ? 'none' : '';
+        document.getElementById('opfsUploadFolderBtn').style.display = atRoot ? 'none' : '';
+        renderOpfsBreadcrumbs();
+      } catch (e) {
+        opfsExplorerStatus.textContent = `Explorer error: ${e.message || e}`;
+        say(`[opfs] Explorer refresh failed: ${e.message || e}`);
+      }
+    }
+
+    function addEntryButton(parent, text, action, cls = '') {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = `entry-btn ${cls}`;
+      btn.textContent = text;
+      btn.onclick = action;
+      parent.appendChild(btn);
+    }
+
+    function currentExplorerPathWith(name) {
+      return normalizeProfilePath('/' + [...opfsExplorerPath, name].join('/'));
+    }
+
+    function renderOpfsBreadcrumbs() {
+      opfsBreadcrumbs.textContent = '';
+      const parts = [''];
+      for (let i = 0; i < opfsExplorerPath.length; i++) {
+        parts.push(opfsExplorerPath[i]);
+      }
+      parts.forEach((part, index) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'breadcrumb-btn';
+        btn.textContent = index === 0 ? 'OPFS' : part;
+        btn.onclick = () => {
+          opfsExplorerPath = parts.slice(1, index + 1);
+          refreshOpfsExplorer();
+        };
+        opfsBreadcrumbs.appendChild(btn);
+      });
+    }
+
+    async function openOpfsExplorerFolder(name) {
+      opfsExplorerPath.push(name);
+      await refreshOpfsExplorer();
+    }
+
+    function setDefaultOpfsProfile(path) {
+      if (localStorage.getItem(OPFS_DEFAULT_PROFILE_KEY) === path) {
+        localStorage.removeItem(OPFS_DEFAULT_PROFILE_KEY);
+        defaultOpfsProfileCheckbox.checked = false;
+        say(`[opfs] Removed default profile: ${path}`);
+      } else {
+        localStorage.setItem(OPFS_DEFAULT_PROFILE_KEY, normalizeProfilePath(path));
+        defaultOpfsProfileCheckbox.checked = true;
+        say(`[opfs] Default profile set to ${normalizeProfilePath(path)}.`);
+      }
+      initStorageSystem();
+    }
+
+    async function ensureDefaultOpfsProfile() {
+      if (!hasOPFS || !opfsDirHandle) return;
+
+      const defaultPath = '/Defualt';
+      const defaultHandle = await opfsDirHandle.getDirectoryHandle('Defualt', { create: true });
+      const savedDefault = localStorage.getItem(OPFS_DEFAULT_PROFILE_KEY);
+
+      if (!savedDefault) {
+        localStorage.setItem(OPFS_DEFAULT_PROFILE_KEY, defaultPath);
+        opfsProfileHandle = defaultHandle;
+        opfsProfilePath = defaultPath;
+        say('[opfs] No default profile was set; using /Defualt.');
+      }
+    }
+
+    async function useOpfsProfile(path) {
+      if (!hasOPFS) return;
+      try {
+        const normalized = normalizeProfilePath(path);
+        const handle = await getOpfsPathHandle(normalized, false);
+        if (!handle) throw new Error('Profile directory does not exist.');
+        opfsProfilePath = normalized;
+        opfsProfileHandle = handle;
+        storageMode = 'opfs';
+        localStorage.setItem(STORAGE_MODE_KEY, 'opfs');
+        lastSyncedMeta.clear();
+        knownEngineFiles.clear();
+        forceFullSync = true;
+        await initStorageSystem();
+        defaultOpfsProfileCheckbox.checked = localStorage.getItem(OPFS_DEFAULT_PROFILE_KEY) === normalized;
+        await refreshOpfsExplorer();
+        say(`[opfs] Active profile changed to ${normalized}.`);
+
+        if (window.Module && window.Module.FS) {
+          userFolderRestored = false;
+          await clearEngineUserFiles();
+          await applyInitialSaves();
+          if (engineFullyInitialized) await syncEngineSavesToDisk();
+        }
+      } catch (e) {
+        alert(`Could not use that folder as a profile: ${e.message || e}`);
+      }
+    }
+
+    async function createOpfsFolder() {
+      const name = prompt(opfsExplorerPath.length === 0 ? 'New profile name:' : 'New folder name:');
+      if (!name || /[\/\\]/.test(name) || name === '.' || name === '..') return;
+      try {
+        const dir = await getExplorerDirectory();
+        await dir.getDirectoryHandle(name, { create: true });
+        await refreshOpfsExplorer();
+      } catch (e) {
+        alert(`Could not create folder: ${e.message || e}`);
+      }
+    }
+
+    function triggerUpload(mode) {
+      const input = mode === 'folder'
+        ? document.getElementById('opfsFolderInput')
+        : document.getElementById('opfsUploadInput');
+      input.value = '';
+      input.click();
+    }
+
+    async function writeUploadedFile(file, relativeOverride = '') {
+      const dir = await getExplorerDirectory();
+      const rel = relativeOverride || file.webkitRelativePath || file.name;
+      const parts = rel.split('/').filter(Boolean);
+      const fileName = parts.pop();
+      let targetDir = dir;
+      for (const part of parts) {
+        targetDir = await targetDir.getDirectoryHandle(part, { create: true });
+      }
+      const handle = await targetDir.getFileHandle(fileName, { create: true });
+      const writable = await handle.createWritable();
+      try {
+        await writable.write(await file.arrayBuffer());
+        await writable.close();
+      } catch (e) {
+        try { await writable.abort(); } catch (_) {}
+        throw e;
+      }
+    }
+
+    async function uploadSelectedFiles(files) {
+      if (!hasOPFS) return;
+      try {
+        for (const file of files) {
+          await writeUploadedFile(file);
+          say(`[opfs] Uploaded ${file.webkitRelativePath || file.name}.`);
+        }
+        await refreshOpfsExplorer();
+        if (storageMode === 'opfs' && window.Module && window.Module.FS) {
+          userFolderRestored = false;
+          await applyInitialSaves();
+        }
+      } catch (e) {
+        alert(`Upload failed: ${e.message || e}`);
+      }
+    }
+
+    async function openOpfsFile(entry) {
+      try {
+        const file = await entry.getFile();
+        const url = URL.createObjectURL(file);
+        const win = window.open(url, '_blank');
+        if (!win) alert('The browser blocked the new tab. Please allow pop-ups to view files.');
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+      } catch (e) {
+        alert(`Could not open file: ${e.message || e}`);
+      }
+    }
+
+    async function downloadOpfsFile(entry) {
+      const file = await entry.getFile();
+      const url = URL.createObjectURL(file);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = file.name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    async function replaceOpfsFile(entry) {
+      const input = document.getElementById('opfsReplaceInput');
+      input.value = '';
+      input.onchange = async () => {
+        const file = input.files[0];
+        if (!file) return;
+        try {
+          const dir = await getExplorerDirectory();
+          const handle = await dir.getFileHandle(entry.name, { create: true });
+          const writable = await handle.createWritable();
+          await writable.write(await file.arrayBuffer());
+          await writable.close();
+          await refreshOpfsExplorer();
+          say(`[opfs] Replaced ${entry.name}.`);
+        } catch (e) {
+          alert(`Replace failed: ${e.message || e}`);
+        }
+      };
+      input.click();
+    }
+
+    async function deleteOpfsEntry(entry) {
+      if (!confirm(`Delete ${entry.kind === 'directory' ? 'folder' : 'file'} "${entry.name}"?`)) return;
+      try {
+        const dir = await getExplorerDirectory();
+        await dir.removeEntry(entry.name, { recursive: entry.kind === 'directory' });
+        await refreshOpfsExplorer();
+        say(`[opfs] Deleted ${entry.name}.`);
+      } catch (e) {
+        alert(`Delete failed: ${e.message || e}`);
+      }
+    }
+
+    function crc32(bytes) {
+      let crc = -1;
+      for (let i = 0; i < bytes.length; i++) {
+        crc ^= bytes[i];
+        for (let j = 0; j < 8; j++) crc = (crc >>> 1) ^ (crc & 1 ? 0xEDB88320 : 0);
+      }
+      return (crc ^ -1) >>> 0;
+    }
+
+    function zipDosTime(date = new Date()) {
+      return {
+        time: (date.getHours() << 11) | (date.getMinutes() << 5) | Math.floor(date.getSeconds() / 2),
+        date: ((date.getFullYear() - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate()
+      };
+    }
+
+    function u16(n) { return new Uint8Array([n & 255, (n >>> 8) & 255]); }
+    function u32(n) { return new Uint8Array([n & 255, (n >>> 8) & 255, (n >>> 16) & 255, (n >>> 24) & 255]); }
+    function concatBytes(parts) {
+      const total = parts.reduce((n, p) => n + p.length, 0);
+      const out = new Uint8Array(total);
+      let off = 0;
+      for (const p of parts) { out.set(p, off); off += p.length; }
+      return out;
+    }
+
+    async function collectOpfsFiles(dir, prefix = '') {
+      const out = [];
+      for await (const entry of dir.values()) {
+        const path = prefix ? `${prefix}/${entry.name}` : entry.name;
+        if (entry.kind === 'file') {
+          const file = await entry.getFile();
+          out.push({ path, data: new Uint8Array(await file.arrayBuffer()), date: file.lastModified ? new Date(file.lastModified) : new Date() });
+        } else {
+          out.push(...await collectOpfsFiles(entry, path));
+        }
+      }
+      return out;
+    }
+
+    async function createStoreZip(files) {
+      const local = [], central = [];
+      let offset = 0;
+      for (const item of files) {
+        const name = new TextEncoder().encode(item.path);
+        const { time, date } = zipDosTime(item.date);
+        const crc = crc32(item.data);
+        const header = concatBytes([
+          new Uint8Array([0x50,0x4b,0x03,0x04]),
+          u16(20), u16(0), u16(0), u16(time), u16(date),
+          u32(crc), u32(item.data.length), u32(item.data.length), u16(name.length), u16(0), name
+        ]);
+        local.push(header, item.data);
+
+        const centralHeader = concatBytes([
+          new Uint8Array([0x50,0x4b,0x01,0x02]),
+          u16(20), u16(20), u16(0), u16(0), u16(time), u16(date),
+          u32(crc), u32(item.data.length), u32(item.data.length),
+          u16(name.length), u16(0), u16(0), u16(0), u16(0), u32(0), u32(offset), name
+        ]);
+        central.push(centralHeader);
+        offset += header.length + item.data.length;
+      }
+      const centralBytes = concatBytes(central);
+      const localBytes = concatBytes(local);
+      const end = concatBytes([
+        new Uint8Array([0x50,0x4b,0x05,0x06]),
+        u16(0), u16(0), u16(files.length), u16(files.length),
+        u32(centralBytes.length), u32(localBytes.length), u16(0)
+      ]);
+      return new Blob([localBytes, centralBytes, end], { type: 'application/zip' });
+    }
+
+    async function downloadOpfsFolder(entry) {
+      try {
+        const files = await collectOpfsFiles(entry, entry.name);
+        const blob = await createStoreZip(files);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${entry.name}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        say(`[opfs] Downloaded folder ${entry.name} as ZIP (${files.length} file(s)).`);
+      } catch (e) {
+        alert(`Could not create folder ZIP: ${e.message || e}`);
+      }
+    }
+
+    document.getElementById('opfsUpBtn').addEventListener('click', async () => {
+      if (opfsExplorerPath.length) opfsExplorerPath.pop();
+      await refreshOpfsExplorer();
+    });
+    document.getElementById('opfsRefreshBtn').addEventListener('click', refreshOpfsExplorer);
+    document.getElementById('opfsNewFolderBtn').addEventListener('click', createOpfsFolder);
+    document.getElementById('opfsUploadFilesBtn').addEventListener('click', () => triggerUpload('files'));
+    document.getElementById('opfsUploadFolderBtn').addEventListener('click', () => triggerUpload('folder'));
+
+    const opfsExplorerModal = document.getElementById('opfsExplorerModal');
+    document.getElementById('openOpfsExplorerBtn').addEventListener('click', async () => {
+      opfsExplorerPath = [];
+      opfsExplorerModal.classList.remove('hidden');
+      await refreshOpfsExplorer();
+    });
+    document.getElementById('closeOpfsExplorerBtn').addEventListener('click', () => {
+      opfsExplorerModal.classList.add('hidden');
+    });
+    opfsExplorerModal.addEventListener('click', e => {
+      if (e.target === opfsExplorerModal) opfsExplorerModal.classList.add('hidden');
+    });
+
+    document.getElementById('opfsUploadInput').addEventListener('change', e => uploadSelectedFiles([...e.target.files]));
+    document.getElementById('opfsFolderInput').addEventListener('change', e => uploadSelectedFiles([...e.target.files]));
+
+    defaultOpfsProfileCheckbox.addEventListener('change', async () => {
+      if (defaultOpfsProfileCheckbox.checked) {
+        localStorage.setItem(OPFS_DEFAULT_PROFILE_KEY, opfsProfilePath);
+      } else {
+        localStorage.removeItem(OPFS_DEFAULT_PROFILE_KEY);
+      }
+      await initStorageSystem();
+      await refreshOpfsExplorer();
+    });
+
+    document.getElementById('selectDirBtn').addEventListener('click', async () => {
+      try {
+        if (!hasNFS) {
+          alert("Your browser does not support the Native File System API.");
+          return;
+        }
+        const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+        saveDirHandle = handle;
+        const permission = await verifyDirectoryAccess(saveDirHandle);
+        if (!permission) throw new Error('The selected folder could not be opened with read/write access.');
+        document.getElementById('dirStatus').textContent = `NFS folder: ${saveDirHandle.name} — Read/Write OK.`;
+        storageMode = 'nfs';
+        localStorage.setItem(STORAGE_MODE_KEY, 'nfs');
+        initialFilesData = [];
+        lastSyncedMeta.clear();
+        knownEngineFiles.clear();
+        await initStorageSystem();
+        updatePlayButtonState();
+        say(`[websave] Linked native directory: ${saveDirHandle.name}`);
+
+        updateProgress(94, "Loading save folder...");
+        await readDirRecursive(saveDirHandle, '', initialFilesData);
+        say(`[websave] Disk scan complete: ${initialFilesData.length} file(s) found.`);
+
+        if (window.Module && window.Module.FS) {
+          await applyInitialSaves();
+          if (engineFullyInitialized) await syncEngineSavesToDisk();
+        }
+      } catch (e) {
+        say(`[websave] Folder selection FAILED: ${e.message || e}`);
+        document.getElementById('dirStatus').textContent = `NFS folder error: ${e.message || 'selection cancelled or failed.'}`;
+        updatePlayButtonState();
+      }
+    });
+
+    async function readDirRecursive(dirHandle, relPath, filesData) {
+      for await (const entry of dirHandle.values()) {
+        const entryRelPath = relPath ? `${relPath}/${entry.name}` : entry.name;
+        const fullPath = '/' + entryRelPath;
+        if (entry.kind === 'file') {
+          const file = await entry.getFile();
+          filesData.push({ path: fullPath, buffer: new Uint8Array(await file.arrayBuffer()) });
+        } else {
+          await readDirRecursive(entry, entryRelPath, filesData);
+        }
+      }
+    }
+
+    async function verifyDirectoryAccess(handle) {
+      try {
+        let permission = await handle.queryPermission({ mode: 'readwrite' });
+        if (permission !== 'granted') permission = await handle.requestPermission({ mode: 'readwrite' });
+        if (permission !== 'granted') return false;
+        const testName = `.gd_web_save_test_${Date.now()}`;
+        const testHandle = await handle.getFileHandle(testName, { create: true });
+        const writable = await testHandle.createWritable();
+        await writable.write(new Uint8Array([71,68,95,87,69,66]));
+        await writable.close();
+        await handle.removeEntry(testName);
+        return true;
+      } catch (e) {
+        say(`[websave] ERROR: Folder WRITE TEST FAILED: ${e.message || e}`);
+        return false;
+      }
+    }
+
+    async function getOrCreateDirHandle(rootHandle, relDirPath) {
+      let handle = rootHandle;
+      if (!relDirPath) return handle;
+      for (const part of relDirPath.split('/').filter(Boolean)) {
+        handle = await handle.getDirectoryHandle(part, { create: true });
+      }
+      return handle;
+    }
+
+    async function writeEngineFileToHandle(rootHandle, FS, path, size, mtimeMs) {
+      if (coreEngineFiles.has(path)) return false;
+      const data = FS.readFile(path);
+      const relPath = path.replace(/^\/+/, '');
+      if (!relPath) return false;
+      const slashIdx = relPath.lastIndexOf('/');
+      const dirPart = slashIdx === -1 ? '' : relPath.slice(0, slashIdx);
+      const fileName = slashIdx === -1 ? relPath : relPath.slice(slashIdx + 1);
+      const dirHandle = await getOrCreateDirHandle(rootHandle, dirPart);
+      const fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
+      const writable = await fileHandle.createWritable();
+      try { await writable.write(data); await writable.close(); }
+      catch (e) { try { await writable.abort(); } catch (_) {} throw e; }
+      lastSyncedMeta.set(path, { size, mtimeMs });
+      knownEngineFiles.add(path);
+      say(`[websave] SAVED ${path} -> ${relPath} (${size} bytes)`);
+      return true;
+    }
+
+    async function clearEngineUserFiles() {
+      if (!window.Module || !window.Module.FS) return;
+      const FS = window.Module.FS;
+      const entries = [];
+      await walkEngineFS(FS, '/', entries);
+      for (const { path } of entries) {
+        try {
+          FS.unlink(path);
+        } catch (e) {
+          say(`[websave] Could not clear ${path} while switching storage: ${e.message || e}`);
+        }
+      }
+      lastSyncedMeta.clear();
+      knownEngineFiles.clear();
+    }
+
+    async function applyInitialSaves() {
+      if (!window.Module || !window.Module.FS) return;
+      if (!coreFilesystemInitialized) await initializeCoreFilesystem();
+      const activeHandle = await getActiveStorageHandle();
+
+      if (!activeHandle) {
+        userFolderRestored = true;
+        say('[websave] RAM mode active; no persistent files restored.');
+        return;
+      }
+
+      initialFilesData = [];
+      await readDirRecursive(activeHandle, '', initialFilesData);
+      const FS = window.Module.FS;
+      let restored = 0;
+      updateProgress(97, "Loading save folder...");
+
+      for (let i = 0; i < initialFilesData.length; i++) {
+        const { path, buffer } = initialFilesData[i];
+        try {
+          const slash = path.lastIndexOf('/');
+          const dir = slash <= 0 ? '/' : path.slice(0, slash);
+          if (dir) { try { FS.mkdirTree(dir); } catch (_) {} }
+          FS.writeFile(path, buffer);
+          lastSyncedMeta.set(path, { size: buffer.length, mtimeMs: 0 });
+          knownEngineFiles.add(path);
+          restored++;
+          if ((i & 127) === 0 || i === initialFilesData.length - 1) {
+            updateProgress(97, `Loading save folder... ${i + 1}/${initialFilesData.length}`);
+            await yieldToBrowser();
+          }
+        } catch (e) {
+          say(`[websave] RESTORE FAILED ${path}: ${e.message || e}`);
+        }
+      }
+      userFolderRestored = true;
+      say(`[websave] Restore complete: ${restored}/${initialFilesData.length} file(s).`);
+    }
+
+    async function initializeCoreFilesystem() {
+      if (coreFilesystemInitialized || !window.Module || !window.Module.FS) return;
+      const FS = window.Module.FS;
+      coreEngineFiles.clear();
+      const scanned = [];
+      async function scan(dirPath) {
+        let names;
+        try { names = FS.readdir(dirPath); } catch (_) { return; }
+        for (const name of names) {
+          if (name === '.' || name === '..') continue;
+          const fullPath = dirPath === '/' ? '/' + name : dirPath + '/' + name;
+          let stat;
+          try { stat = FS.stat(fullPath); } catch (_) { continue; }
+          if (FS.isDir(stat.mode)) await scan(fullPath);
+          else if (FS.isFile(stat.mode)) { coreEngineFiles.add(fullPath); scanned.push(fullPath); }
+          if ((scanned.length & 255) === 0) await yieldToBrowser();
+        }
+      }
+      await scan('/');
+      coreFilesystemInitialized = true;
+      say(`[websave] CORE filesystem initialized: ${coreEngineFiles.size} file(s).`);
+    }
+
+    async function walkEngineFS(FS, dirPath, out) {
+      let entries;
+      try { entries = FS.readdir(dirPath); } catch (_) { return; }
+      for (const name of entries) {
+        if (name === '.' || name === '..') continue;
+        const fullPath = dirPath === '/' ? '/' + name : dirPath + '/' + name;
+        if (coreEngineFiles.has(fullPath)) continue;
+        let stat;
+        try { stat = FS.stat(fullPath); } catch (_) { continue; }
+        if (FS.isDir(stat.mode)) await walkEngineFS(FS, fullPath, out);
+        else if (FS.isFile(stat.mode)) out.push({ path: fullPath, size: stat.size, mtimeMs: stat.mtime ? stat.mtime.getTime() : 0 });
+      }
+    }
+
+    async function syncEngineSavesToDisk() {
+      const activeHandle = await getActiveStorageHandle();
+      if (!window.Module || !window.Module.FS || !activeHandle || syncInProgress) return;
+      if (!coreFilesystemInitialized || !userFolderRestored || !engineFullyInitialized) return;
+
+      syncInProgress = true;
+      const FS = window.Module.FS;
+      const started = performance.now();
+      try {
+        if (storageMode === 'nfs' && saveDirHandle) {
+          let permission = await saveDirHandle.queryPermission({ mode: 'readwrite' });
+          if (permission !== 'granted') permission = await saveDirHandle.requestPermission({ mode: 'readwrite' });
+          if (permission !== 'granted') return;
+        }
+
+        const entries = [];
+        await walkEngineFS(FS, '/', entries);
+        let saved = 0, unchanged = 0;
+
+        for (const { path, size, mtimeMs } of entries) {
+          const meta = lastSyncedMeta.get(path);
+          if (!forceFullSync && meta && meta.size === size && meta.mtimeMs === mtimeMs) {
+            unchanged++;
+            knownEngineFiles.add(path);
+            continue;
+          }
+          if (await writeEngineFileToHandle(activeHandle, FS, path, size, mtimeMs)) saved++;
+          if ((saved & 31) === 0) await yieldToBrowser();
+        }
+
+        const currentPaths = new Set(entries.map(e => e.path));
+        for (const oldPath of Array.from(knownEngineFiles)) {
+          if (coreEngineFiles.has(oldPath) || currentPaths.has(oldPath)) continue;
+          try {
+            const relPath = oldPath.replace(/^\/+/, '');
+            const slashIdx = relPath.lastIndexOf('/');
+            const dirPart = slashIdx === -1 ? '' : relPath.slice(0, slashIdx);
+            const fileName = slashIdx === -1 ? relPath : relPath.slice(slashIdx + 1);
+            const dirHandle = await getOrCreateDirHandle(activeHandle, dirPart);
+            await dirHandle.removeEntry(fileName);
+            knownEngineFiles.delete(oldPath);
+            lastSyncedMeta.delete(oldPath);
+            say(`[websave] DELETED ${oldPath} from persistent storage.`);
+          } catch (e) {
+            if (e.name === 'NotFoundError') {
+              knownEngineFiles.delete(oldPath);
+              lastSyncedMeta.delete(oldPath);
+            }
+          }
+        }
+
+        forceFullSync = false;
+        say(`[websave] SYNC complete: saved=${saved}, unchanged=${unchanged}, elapsed=${Math.round(performance.now() - started)}ms.`);
+      } catch (e) {
+        say(`[websave] SYNC FAILED: ${e.message || e}`);
+      } finally {
+        syncInProgress = false;
+      }
+    }
+
+    async function yieldToBrowser() {
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+
+    // Restore the user's last selected storage mode/profile.
+    (async function initializeStoragePreferences() {
+      const savedMode = localStorage.getItem(STORAGE_MODE_KEY);
+      if (savedMode === 'nfs' && hasNFS) storageMode = 'nfs';
+      else if (savedMode === 'ram') storageMode = 'ram';
+      else storageMode = hasOPFS ? 'opfs' : (hasNFS ? 'nfs' : 'ram');
+
+      if (hasOPFS) {
+        opfsDirHandle = await getOpfsHandle();
+        await ensureDefaultOpfsProfile();
+      }
+
+      const savedProfile = localStorage.getItem(OPFS_DEFAULT_PROFILE_KEY);
+      if (hasOPFS && savedProfile) {
+        try {
+          const h = await getOpfsPathHandle(savedProfile, false);
+          if (h) {
+            opfsProfilePath = normalizeProfilePath(savedProfile);
+            opfsProfileHandle = h;
+            storageMode = 'opfs';
+          }
+        } catch (e) {
+          say(`[opfs] Default profile unavailable: ${e.message || e}`);
+        }
+      }
+      defaultOpfsProfileCheckbox.checked = !!savedProfile && normalizeProfilePath(savedProfile) === opfsProfilePath;
+      await initStorageSystem();
+      await refreshOpfsExplorer();
+    })();
+
+    document.getElementById('opfsProfilePath').addEventListener('dblclick', () => refreshOpfsExplorer());
+
+    document.getElementById('opfsUploadFilesBtn').title = 'Upload files into the current OPFS explorer folder';
+    document.getElementById('opfsUploadFolderBtn').title = 'Upload a folder while preserving its relative structure';
+
+    /*
+     * ------------------------------------------------------------------
+     * FIRST FRAME
+     * ------------------------------------------------------------------
+     */
+
+    window.gdFirstFrame = function() {
+      say('[system] Engine rendered first frame.');
+      if (window.__gdAckFocus) window.__gdAckFocus(true);
+    };
+
+    /*
+     * ------------------------------------------------------------------
+     * ENGINE LAUNCH
+     * ------------------------------------------------------------------
+     */
+
+    function launchEngine(wasmBuffer, dataBuffer) {
+      updateProgress(95, "Initializing Runtime...");
+
+      window.Module = {
+        canvas: document.getElementById('canvas'),
+        wasmBinary: wasmBuffer,
+        gdInputQueue: [],
+        gdCursorPos: [0, 0],
+        gdKeyState: new Uint8Array(256),
+
+        getPreloadedPackage: function() {
+          return dataBuffer;
+        },
+
+        print: function(text) { say(text); },
+        printErr: function(text) { say(text); },
+        setStatus: function(text) { if (text) say(text); },
+        onAbort: function(what) { triggerAbort(what); },
+
+        onRuntimeInitialized: async function() {
+          say('[system] WebAssembly runtime initialized.');
+          const FS = window.Module.FS;
+
+          try {
+            updateProgress(94, "Initializing engine files...");
+            say('[websave] Scanning original engine filesystem before loading saves...');
+            await initializeCoreFilesystem();
+
+            const activeHandle = await getActiveStorageHandle();
+
+            if (activeHandle) {
+              say('[websave] Core scan complete. Loading active storage folder...');
+              await applyInitialSaves();
+            } else {
+              say('[websave] No persistent storage folder available.');
+              userFolderRestored = true;
+            }
+
+            try {
+              if (FS) FS.chdir('/Resources');
+            } catch (e) {
+              say(`[websave] Could not chdir to /Resources: ${e.message || e}`);
+            }
+
+            updateProgress(98, "Starting game...");
+
+            if (activeHandle) {
+              if (saveSyncTimer) {
+                clearInterval(saveSyncTimer);
+                saveSyncTimer = null;
+              }
+              forceFullSync = true;
+              say('[websave] Save synchronization armed; waiting for game initialization.');
+            } else {
+              say('[websave] Saves are RAM-only because no persistent storage is linked.');
+            }
+
+          } catch (e) {
+            say(`[websave] Runtime save setup FAILED: ${e.message || e}`);
+          }
+
+          try {
+            const finishInit = async () => {
+              engineFullyInitialized = true;
+              say('[system] Game engine initialization complete.');
+
+              const activeHandle = await getActiveStorageHandle();
+
+              if (activeHandle) {
+                if (saveSyncTimer) clearInterval(saveSyncTimer);
+                forceFullSync = true;
+                saveSyncTimer = setInterval(() => {
+                  syncEngineSavesToDisk().catch(e => say(`[websave] Background sync exception: ${e.message || e}`));
+                }, 2000);
+
+                say('[websave] Background disk sync started (2s).');
+                syncEngineSavesToDisk().catch(e => say(`[websave] Initial post-init sync exception: ${e.message || e}`));
+              }
+
+              say('[system] Game engine inputs unlocked.');
+              window.__gdInputReady = true;
+            };
+
+            if (typeof window.Module._gd_boot === 'function') {
+              say('[system] Calling _gd_boot()...');
+              const r = window.Module._gd_boot();
+
+              if (r && typeof r.then === 'function') {
+                let __bootSettled = false;
+                const __bootWrap = function(fn) {
+                  return function(x) {
+                    if (__bootSettled) return;
+                    __bootSettled = true;
+                    fn(x);
+                  };
+                };
+
+                r.then(__bootWrap(finishInit)).catch(__bootWrap(function(err) {
+                  say('[error] Boot promise rejected: ' + err);
+                  finishInit();
+                }));
+
+                setTimeout(function() {
+                  if (__bootSettled) return;
+                  __bootSettled = true;
+                  say('[warning] _gd_boot() promise never settled after 5s — forcing input unlock.');
+                  finishInit();
+                }, 5000);
+              } else {
+                finishInit();
+              }
+            } else {
+              say('[warning] _gd_boot export not found. Assuming automatic boot.');
+              finishInit();
+            }
+
+          } catch (e) {
+            say('[error] Engine boot exception: ' + e.message);
+            engineFullyInitialized = true;
+            window.__gdInputReady = true;
+          }
+
+          updateProgress(100, "Ready!");
+
+          setTimeout(() => {
+            loadingOverlay.classList.add('hidden');
+            if (document.getElementById('showLogsCheckbox').checked) {
+              document.getElementById('mobileLogsBtn').classList.add('visible');
+            }
+            if (document.getElementById('showBackBtnCheckbox').checked) {
+              document.getElementById('mobileBackBtn').classList.add('visible');
+            }
+          }, 300);
+        }
+      };
+
+      const script = document.createElement('script');
+      script.src = 'gd_web.js';
+      script.onerror = function() {
+        triggerAbort("Failed to load local runtime script 'gd_web.js'. Ensure it is in the same folder.");
+      };
+      document.body.appendChild(script);
+    }
+
+    /*
+     * ------------------------------------------------------------------
+     * PLAY BUTTON
+     * ------------------------------------------------------------------
+     */
+
+    document.getElementById('playBtn').addEventListener('click', async () => {
+      if (storageMode === 'nfs' && !saveDirHandle) return;
+      requestFullscreenSafe();
+      startScreen.classList.add('hidden');
+      loadingOverlay.classList.remove('hidden');
+
+      activeProxyPrefix = document.getElementById('proxyInput').value.trim();
+
+      if (activeProxyPrefix) {
+        say(`[proxy] Enabled GD proxy prefix: ${activeProxyPrefix}`);
+      }
+
+      const wasmFile = document.getElementById('manualWasm').files[0];
+      const dataFile = document.getElementById('manualData').files[0];
+
+      try {
+        if (wasmFile && dataFile) {
+          updateProgress(10, "Reading local WASM file...");
+          const wasmBuffer = await wasmFile.arrayBuffer();
+
+          updateProgress(50, "Reading local Data package...");
+          const dataBuffer = await dataFile.arrayBuffer();
+
+          if ('caches' in window) {
+            try {
+              const cache = await caches.open(CACHE_NAME);
+              const defaultWasm = 'https://media.githubusercontent.com/media/MarzRovin/GDWASM/main/gd_web.wasm';
+              const defaultData = 'https://media.githubusercontent.com/media/MarzRovin/GDWASM/main/gd_web.data';
+              
+              await cache.put(defaultWasm, new Response(wasmBuffer.slice(0)));
+              await cache.put(defaultData, new Response(dataBuffer.slice(0)));
+              say('[cache] Saved manual files to local cache under default URLs.');
+            } catch (err) {
+              say(`[cache] Failed saving manual files to cache: ${err.message}`);
+            }
+          }
+
+          launchEngine(wasmBuffer, dataBuffer);
+        } else {
+          let wasmUrl = document.getElementById('wasmUrlInput').value.trim();
+          let dataUrl = document.getElementById('dataUrlInput').value.trim();
+
+          if (!wasmUrl) {
+            wasmUrl = 'https://media.githubusercontent.com/media/MarzRovin/GDWASM/main/gd_web.wasm';
+          }
+          if (!dataUrl) {
+            dataUrl = 'https://media.githubusercontent.com/media/MarzRovin/GDWASM/main/gd_web.data';
+          }
+
+          updateProgress(5, 'Checking cache or contacting server...');
+          const wasmBuffer = await fetchAsset('gd_web.wasm', wasmUrl, 'gd_web.wasm', 5, 40);
+          const dataBuffer = await fetchAsset('gd_web.data', dataUrl, 'gd_web.data', 45, 45);
+          launchEngine(wasmBuffer, dataBuffer);
+        }
+      } catch (err) {
+        triggerAbort(err.message || "Failed to load assets.");
+      }
+    });
+  </script>
+
+  <script>
+    /*
+     * ------------------------------------------------------------------
+     * GEOMETRY DASH INPUT BRIDGE
+     * ------------------------------------------------------------------
+     */
+
+    (function () {
+      const el = document.getElementById('canvas');
+
+      const WM_MOUSEMOVE = 0x200;
+      const WM_LBUTTONDOWN = 0x201;
+      const WM_LBUTTONUP = 0x202;
+      const WM_RBUTTONDOWN = 0x204;
+      const WM_RBUTTONUP = 0x205;
+      const WM_MBUTTONDOWN = 0x207;
+      const WM_MBUTTONUP = 0x208;
+
+      function ready() {
+        return window.__gdInputReady === true;
+      }
+
+      function overCanvas(e) {
+        var r;
+        if (!ready() || !el) return false;
+        if (e.target && e.target.closest && e.target.closest('#console, #startScreen, #abortScreen, a, button, input, textarea, select')) {
+          return false;
+        }
+        r = el.getBoundingClientRect();
+        return (e.clientX >= r.left && e.clientX < r.right && e.clientY >= r.top && e.clientY < r.bottom);
+      }
+
+      function pos(e) {
+        const r = el.getBoundingClientRect();
+        const x = Math.max(0, Math.min(1919, Math.round((e.clientX - r.left) * 1920 / r.width)));
+        const y = Math.max(0, Math.min(1079, Math.round((e.clientY - r.top) * 1080 / r.height)));
+
+        Module.gdCursorPos[0] = x;
+        Module.gdCursorPos[1] = y;
+
+        return ((x & 0xffff) | ((y & 0xffff) << 16));
+      }
+
+      function push(m, w, l) {
+        Module.gdInputQueue.push([m | 0, w | 0, l | 0]);
+      }
+
+      var ackedFocus = false;
+
+      function ackFocus() {
+        if (ackedFocus) return;
+        ackedFocus = true;
+        push(0x0006, 1, 0);
+        push(0x0007, 0, 0);
+        push(0x001c, 1, 0);
+      }
+
+      window.__gdAckFocus = ackFocus;
+
+      window.addEventListener('mousedown', function(e) {
+        if (!overCanvas(e)) return;
+        var m = e.button === 2 ? WM_RBUTTONDOWN : (e.button === 1 ? WM_MBUTTONDOWN : WM_LBUTTONDOWN);
+        var w = e.button === 2 ? 2 : (e.button === 1 ? 16 : 1);
+        push(m, w, pos(e));
+        e.preventDefault();
+      });
+
+      window.addEventListener('mouseup', function(e) {
+        if (!ready()) return;
+        var m = e.button === 2 ? WM_RBUTTONUP : (e.button === 1 ? WM_MBUTTONUP : WM_LBUTTONUP);
+        push(m, 0, pos(e));
+        if (e.target === el) e.preventDefault();
+      });
+
+      function touchPos(t) {
+        const r = el.getBoundingClientRect();
+        const x = Math.max(0, Math.min(1919, Math.round((t.clientX - r.left) * 1920 / r.width)));
+        const y = Math.max(0, Math.min(1079, Math.round((t.clientY - r.top) * 1080 / r.height)));
+
+        Module.gdCursorPos[0] = x;
+        Module.gdCursorPos[1] = y;
+
+        return ((x & 0xffff) | ((y & 0xffff) << 16));
+      }
+
+      window.addEventListener('touchstart', function(e) {
+        var t = e.changedTouches[0];
+        if (!t || !overCanvas(t)) return;
+        push(WM_LBUTTONDOWN, 1, touchPos(t));
+        e.preventDefault();
+      }, { passive: false });
+
+      window.addEventListener('touchmove', function(e) {
+        if (!ready()) return;
+        var t = e.changedTouches[0];
+        if (!t || !overCanvas(t)) return;
+    
+        var q = Module.gdInputQueue;
+        var l = touchPos(t);
+    
+        if (q.length && q[q.length - 1][0] === WM_MOUSEMOVE) {
+          q[q.length - 1] = [WM_MOUSEMOVE, 1, l];
+        } else {
+          q.push([WM_MOUSEMOVE, 1, l]);
+        }
+        e.preventDefault();
+      }, { passive: false });
+
+      window.addEventListener('touchend', function(e) {
+        if (!ready()) return;
+        var t = e.changedTouches[0];
+        if (!t || !overCanvas(t)) return;
+        push(WM_LBUTTONUP, 0, touchPos(t));
+        e.preventDefault();
+      }, { passive: false });
+
+      window.addEventListener('mousemove', function(e) {
+        if (!ready()) return;
+        var q = Module.gdInputQueue;
+        var w = (e.buttons & 1) ? 1 : 0;
+        var l = pos(e);
+
+        if (q.length && q[q.length - 1][0] === WM_MOUSEMOVE) {
+          q[q.length - 1] = [WM_MOUSEMOVE, w, l];
+        } else {
+          q.push([WM_MOUSEMOVE, w, l]);
+        }
+      });
+
+      window.addEventListener('wheel', function(e) {
+        if (!overCanvas(e)) return;
+        var lp = pos(e);
+        var dv = -e.deltaY;
+        var dh = e.deltaX;
+
+        if (Math.abs(dv) >= Math.abs(dh)) {
+          var notch = dv > 0 ? 120 : -120;
+          push(0x020A, (notch & 0xFFFF) << 16, lp);
+        } else {
+          var hnotch = dh > 0 ? -120 : 120;
+          push(0x020E, (hnotch & 0xFFFF) << 16, lp);
+        }
+        e.preventDefault();
+      }, { passive: false });
+
+      el.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+      });
+
+      el.tabIndex = 0;
+      el.addEventListener('mousedown', function() {
+        el.focus();
+      });
+
+      var VK = {
+        'Escape': 0x1B, 'Space': 0x20, 'Enter': 0x0D, 'Backspace': 0x08, 'Tab': 0x09,
+        'ArrowLeft': 0x25, 'ArrowUp': 0x26, 'ArrowRight': 0x27, 'ArrowDown': 0x28,
+        'KeyW': 0x57, 'KeyA': 0x41, 'KeyS': 0x53, 'KeyD': 0x44, 'KeyQ': 0x51, 
+        'KeyE': 0x45, 'KeyR': 0x52, 'KeyF': 0x46, 'KeyP': 0x50
+      };
+
+      var SCAN = {
+        'Escape': 0x01, 'Space': 0x39, 'Enter': 0x1C, 'Backspace': 0x0E, 'Tab': 0x0F,
+        'ArrowLeft': 0x4B, 'ArrowUp': 0x48, 'ArrowRight': 0x4D, 'ArrowDown': 0x50,
+        'KeyW': 0x11, 'KeyA': 0x1E, 'KeyS': 0x1F, 'KeyD': 0x20, 'KeyQ': 0x10, 
+        'KeyE': 0x12, 'KeyR': 0x13, 'KeyF': 0x21, 'KeyP': 0x19
+      };
+
+      var EXT = {
+        'ArrowLeft': 1, 'ArrowUp': 1, 'ArrowRight': 1, 'ArrowDown': 1
+      };
+
+      function keyEvent(e, down) {
+        if (!ready()) return;
+        try {
+          if (window.getSelection && String(window.getSelection()) !== '') return;
+        } catch (err) {}
+
+        var vk = VK[e.code] || e.keyCode || 0;
+
+        if (down) {
+          var ch = 0;
+          if (e.key && e.key.length === 1) {
+            ch = e.key.charCodeAt(0);
+          } else if (e.code === 'Backspace') {
+            ch = 0x08;
+          } else if (e.code === 'Enter') {
+            ch = 0x0D;
+          }
+
+          if (ch) {
+            var clp = 1 | ((SCAN[e.code] || 0) << 16);
+            if (EXT[e.code]) clp |= 0x1000000;
+            push(0x0102, ch, clp);
+          }
+        }
+
+        if (!vk) return;
+        Module.gdKeyState[vk & 0xff] = down ? 1 : 0;
+        var scan = SCAN[e.code] || 0;
+        var lp = 1 | (scan << 16);
+
+        if (EXT[e.code]) lp |= 0x1000000;
+        if (!down) lp |= -1073741824;
+
+        push(down ? 0x100 : 0x101, vk, lp);
+
+        if (e.code === 'Space' || e.code.startsWith('Arrow') || e.code === 'Escape') {
+          e.preventDefault();
+        }
+      }
+
+      window.addEventListener('keydown', function(e) { keyEvent(e, true); });
+      window.addEventListener('keyup', function(e) { keyEvent(e, false); });
+    })();
+</script>
+
+</body>
+</html>

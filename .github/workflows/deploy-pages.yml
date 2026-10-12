@@ -39,6 +39,15 @@ jobs:
             brotli --decompress --force --output="$output_file" "$source_file"
             test -s "$output_file"
           done
+      - name: Verify Baldi build files are present
+        shell: bash
+        run: |
+          set -euo pipefail
+          build_dir="games/baldi-remaster/baldi-remaster/Build"
+          for file in Fixes.data Fixes.framework.js Fixes.wasm; do
+            test -s "$build_dir/$file"
+            ls -lh "$build_dir/$file"
+          done
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
         with:

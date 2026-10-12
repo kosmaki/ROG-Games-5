@@ -23,6 +23,22 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+      - name: Install Brotli decoder
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes brotli
+      - name: Prepare latest Baldi build for GitHub Pages
+        shell: bash
+        run: |
+          set -euo pipefail
+          build_dir="games/baldi-remaster/baldi-remaster/Build"
+          for file in Fixes.data Fixes.framework.js Fixes.wasm; do
+            source_file="$build_dir/$file.br"
+            output_file="$build_dir/$file"
+            test -s "$source_file"
+            brotli --decompress --force --output="$output_file" "$source_file"
+            test -s "$output_file"
+          done
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
         with:

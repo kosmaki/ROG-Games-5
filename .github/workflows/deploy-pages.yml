@@ -25,6 +25,19 @@ jobs:
         uses: actions/checkout@v4
         with:
           lfs: true
+      - name: Verify Unity Git LFS assets
+        run: |
+          git lfs pull
+          DATA_FILE="games/baldis-basics-remastered/Build/Fixes.data"
+          if [ ! -f "$DATA_FILE" ]; then
+            echo "::error::Unity data file is missing: $DATA_FILE"
+            exit 1
+          fi
+          if head -n 1 "$DATA_FILE" | grep -q "git-lfs.github.com/spec"; then
+            echo "::error::Unity data file is still a Git LFS pointer, not the real 56 MB asset."
+            exit 1
+          fi
+          echo "Unity data asset downloaded: $(stat -c%s "$DATA_FILE") bytes"
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
         with:

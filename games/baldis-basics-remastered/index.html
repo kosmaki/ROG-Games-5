@@ -1,110 +1,87 @@
 <!DOCTYPE html>
 <html lang="en-us">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Baldi's Basics Classic Remastered</title>
-  <link rel="shortcut icon" href="TemplateData/favicon.ico">
-  <link rel="stylesheet" href="TemplateData/style.css">
-  <style>
-    html, body { width:100%; height:100%; margin:0; padding:0; overflow:hidden; background:#000; }
-    #unity-container, #unity-container.unity-desktop { position:fixed; inset:0; width:100%; height:100%; transform:none; left:0; top:0; }
-    #unity-canvas, .unity-mobile #unity-canvas { display:block; width:100%; height:100%; background:#000; }
-    #unity-footer { display:none; }
-    #loading-text { position:fixed; z-index:10; top:12px; left:0; width:100%; color:#fff; text-align:center; font:16px sans-serif; }
-  </style>
-</head>
-<body>
-  <div id="unity-container" class="unity-desktop">
-    <canvas id="unity-canvas" tabindex="-1"></canvas>
-    <div id="unity-loading-bar">
-      <div id="unity-logo"></div>
-      <div id="unity-progress-bar-empty"><div id="unity-progress-bar-full"></div></div>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <title>Unity WebGL Player | Baldi's Basics Classic Remastered Remake</title>
+    <link rel="shortcut icon" href="TemplateData/favicon.ico">
+    <link rel="stylesheet" href="TemplateData/style.css">
+  </head>
+  <body>
+    <div id="unity-container" class="unity-desktop">
+      <canvas id="unity-canvas" width=960 height=600></canvas>
+      <div id="unity-loading-bar">
+        <div id="unity-logo"></div>
+        <div id="unity-progress-bar-empty">
+          <div id="unity-progress-bar-full"></div>
+        </div>
+      </div>
+      <div id="unity-mobile-warning">
+        WebGL builds are not supported on mobile devices.
+      </div>
+      <div id="unity-footer">
+        <div id="unity-webgl-logo"></div>
+        <div id="unity-fullscreen-button"></div>
+        <div id="unity-build-title">Baldi's Basics Classic Remastered Remake</div>
+      </div>
     </div>
-    <div id="unity-mobile-warning">WebGL builds are not supported on mobile devices.</div>
-  </div>
-  <div id="loading-text">Loading Baldi's Basics…</div>
-  <script>
-    (() => {
-      const assetRoot = "https://cdn.jsdelivr.net/gh/bubblfan/web-port@main/baldi-remaster/";
-      const buildRoot = assetRoot + "Build/";
-      const canvas = document.querySelector("#unity-canvas");
-      const container = document.querySelector("#unity-container");
-      const loadingBar = document.querySelector("#unity-loading-bar");
-      const progressBarFull = document.querySelector("#unity-progress-bar-full");
-      const loadingText = document.querySelector("#loading-text");
-      const mobileWarning = document.querySelector("#unity-mobile-warning");
+    <script>
+      var buildUrl = "Build";
+      var loaderUrl = buildUrl + "/Fixes.loader.js";
+      var config = {
+        dataUrl: buildUrl + "/Fixes.data.br",
+        frameworkUrl: buildUrl + "/Fixes.framework.js.br",
+        codeUrl: buildUrl + "/Fixes.wasm.br",
+        streamingAssetsUrl: "StreamingAssets",
+        companyName: "Basically, Games!",
+        productName: "Baldi's Basics Classic Remastered Remake",
+        productVersion: "1.0",
+      };
+
+      var container = document.querySelector("#unity-container");
+      var canvas = document.querySelector("#unity-canvas");
+      var loadingBar = document.querySelector("#unity-loading-bar");
+      var progressBarFull = document.querySelector("#unity-progress-bar-full");
+      var fullscreenButton = document.querySelector("#unity-fullscreen-button");
+      var mobileWarning = document.querySelector("#unity-mobile-warning");
+
+      // By default Unity keeps WebGL canvas render target size matched with
+      // the DOM size of the canvas element (scaled by window.devicePixelRatio)
+      // Set this to false if you want to decouple this synchronization from
+      // happening inside the engine, and you would instead like to size up
+      // the canvas DOM size and WebGL render target sizes yourself.
+      // config.matchWebGLToCanvasSize = false;
 
       if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
         container.className = "unity-mobile";
+        // Avoid draining fillrate performance on mobile devices,
+        // and default/override low DPI mode on mobile browsers.
+        config.devicePixelRatio = 1;
         mobileWarning.style.display = "block";
-        setTimeout(() => { mobileWarning.style.display = "none"; }, 5000);
+        setTimeout(() => {
+          mobileWarning.style.display = "none";
+        }, 5000);
+      } else {
+        canvas.style.width = "960px";
+        canvas.style.height = "600px";
       }
+      loadingBar.style.display = "block";
 
-      const fetchFile = async (url) => {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error("HTTP " + response.status + " loading " + url);
-        return await response.arrayBuffer();
-      };
-      const mergeParts = async (base, count, label) => {
-        const chunks = [];
-        let total = 0;
-        for (let i = 1; i <= count; i++) {
-          loadingText.textContent = "Loading " + label + " (" + i + "/" + count + ")…";
-          const chunk = await fetchFile(base + ".part" + i);
-          chunks.push(chunk);
-          total += chunk.byteLength;
-        }
-        const merged = new Uint8Array(total);
-        let offset = 0;
-        for (const chunk of chunks) {
-          merged.set(new Uint8Array(chunk), offset);
-          offset += chunk.byteLength;
-        }
-        return URL.createObjectURL(new Blob([merged]));
-      };
-
-      const loader = document.createElement("script");
-      loader.src = buildRoot + "WebGL.loader.js";
-      loader.onload = async () => {
-        try {
-          loadingText.textContent = "Downloading game files…";
-          const [dataUrl, codeUrl] = await Promise.all([
-            mergeParts(buildRoot + "WebGL.data", 3, "game data"),
-            mergeParts(buildRoot + "WebGL.wasm", 3, "game engine")
-          ]);
-          const config = {
-            dataUrl,
-            frameworkUrl: buildRoot + "WebGL.framework.js",
-            codeUrl,
-            streamingAssetsUrl: assetRoot + "StreamingAssets",
-            companyName: "Basically Games",
-            productName: "Baldi's Basics Classic Remastered",
-            productVersion: "1.1",
-            devicePixelRatio: Math.min(window.devicePixelRatio || 1, 2)
+      var script = document.createElement("script");
+      script.src = loaderUrl;
+      script.onload = () => {
+        createUnityInstance(canvas, config, (progress) => {
+          progressBarFull.style.width = 100 * progress + "%";
+        }).then((unityInstance) => {
+          loadingBar.style.display = "none";
+          fullscreenButton.onclick = () => {
+            unityInstance.SetFullscreen(1);
           };
-          loadingBar.style.display = "block";
-          createUnityInstance(canvas, config, progress => {
-            progressBarFull.style.width = (100 * progress) + "%";
-            loadingText.textContent = "Starting Baldi… " + Math.round(progress * 100) + "%";
-          }).then(() => {
-            loadingBar.style.display = "none";
-            loadingText.remove();
-          }).catch(error => {
-            console.error("Baldi Unity failed to initialize:", error);
-            loadingText.textContent = "Baldi couldn't start. Open the browser console for details.";
-          });
-        } catch (error) {
-          console.error("Failed to download Baldi game files:", error);
-          loadingText.textContent = "Couldn't download the game files. Refresh and try again.";
-        }
+        }).catch((message) => {
+          alert(message);
+        });
       };
-      loader.onerror = () => {
-        console.error("Couldn't load Unity loader:", loader.src);
-        loadingText.textContent = "Couldn't load the Unity game loader.";
-      };
-      document.body.appendChild(loader);
-    })();
-  </script>
-</body>
+      document.body.appendChild(script);
+    </script>
+  </body>
 </html>
